@@ -4,6 +4,7 @@ import { useGame } from './stores/game';
 import GameCanvas from './components/GameCanvas.vue';
 import Hotbar from './components/Hotbar.vue';
 import CraftPanel from './components/CraftPanel.vue';
+import PostPanel from './components/PostPanel.vue';
 import TouchControls from './components/TouchControls.vue';
 import WorldPicker from './components/WorldPicker.vue';
 
@@ -21,7 +22,8 @@ onMounted(() => game.boot());
           {{ game.toolName }} · T{{ game.toolTier }}
         </div>
         <div class="topbar-actions">
-          <button class="btn btn-ghost" @click="game.craftOpen = !game.craftOpen">合成 (E)</button>
+          <button class="btn btn-ghost" @click="game.postOpen = !game.postOpen; game.craftOpen = false">委托 (F)</button>
+          <button class="btn btn-ghost" @click="game.craftOpen = !game.craftOpen; game.postOpen = false">合成 (E)</button>
           <button class="btn btn-ghost" @click="game.leave()">换个世界</button>
         </div>
       </template>
@@ -36,6 +38,7 @@ onMounted(() => game.boot());
       <Hotbar />
       <TouchControls />
       <CraftPanel v-if="game.craftOpen" />
+      <PostPanel v-if="game.postOpen" />
     </main>
 
     <transition name="fade">

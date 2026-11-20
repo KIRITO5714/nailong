@@ -28,6 +28,12 @@ public class WorldEntity {
   @Lob
   private String inventoryJson;
 
+  @Lob
+  private String ordersJson;
+
+  // 可空：旧存档没有这一列，Hibernate 加列时不能带 NOT NULL，读的时候按 0 兜底。
+  private Integer orderSeq;
+
   private double playerX;
   private double playerY;
   private Instant createdAt;
@@ -49,6 +55,10 @@ public class WorldEntity {
   public void setSurfaceLine(String surfaceLine) { this.surfaceLine = surfaceLine; }
   public String getInventoryJson() { return inventoryJson; }
   public void setInventoryJson(String inventoryJson) { this.inventoryJson = inventoryJson; }
+  public String getOrdersJson() { return ordersJson; }
+  public void setOrdersJson(String ordersJson) { this.ordersJson = ordersJson; }
+  public Integer getOrderSeq() { return orderSeq; }
+  public void setOrderSeq(Integer orderSeq) { this.orderSeq = orderSeq; }
   public double getPlayerX() { return playerX; }
   public void setPlayerX(double playerX) { this.playerX = playerX; }
   public double getPlayerY() { return playerY; }

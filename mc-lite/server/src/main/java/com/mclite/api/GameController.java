@@ -66,6 +66,16 @@ public class GameController {
     return game.craft(id, request.recipeId());
   }
 
+  @GetMapping("/worlds/{id}/orders")
+  public Dtos.OrdersView orders(@PathVariable String id) {
+    return game.orders(id);
+  }
+
+  @PostMapping("/worlds/{id}/deliver")
+  public Dtos.Mutation deliver(@PathVariable String id, @Valid @RequestBody Dtos.Deliver request) {
+    return game.deliver(id, request.orderId());
+  }
+
   @PostMapping("/worlds/{id}/move")
   public Dtos.Ack move(@PathVariable String id, @RequestBody Dtos.Move request) {
     return game.move(id, request.x(), request.y());

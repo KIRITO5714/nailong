@@ -7,6 +7,7 @@ public class WorldGenerator {
 
   private static final int GRASS = 1, DIRT = 2, STONE = 3, LOG = 4, LEAVES = 5;
   private static final int COAL = 6, IRON = 7, GOLD = 8, DIAMOND = 9, BEDROCK = 10;
+  private static final int SAND = 13, GRAVEL = 14;
 
   public World generate(long seed, int width, int height) {
     Random rnd = new Random(seed);
@@ -14,6 +15,7 @@ public class WorldGenerator {
     World world = new World(width, height, new int[width * height], surface);
     terrain(world, rnd, surface, width, height);
     ores(world, rnd, surface, width, height);
+    pockets(world, rnd, surface, width, height);
     trees(world, rnd, surface, width);
     clearSpawn(world, surface, width / 2);
     return world;
@@ -60,6 +62,29 @@ public class WorldGenerator {
         if (world.get(x, y) == STONE) world.set(x, y, id);
         x = clamp(x + rnd.nextInt(3) - 1, 0, width - 1);
         y = clamp(y + rnd.nextInt(3) - 1, min, max);
+      }
+    }
+  }
+
+  // 松散层：土 band 里的沙囊、石 band 里的碎石囊。挖空它们下方就会整列塌下来。
+  private void pockets(World world, Random rnd, int[] surface, int width, int height) {
+    int scale = Math.max(1, width * height / 15360);
+    sandPockets(world, rnd, surface, width, 22 * scale);
+    veinType(world, rnd, surface, width, height, GRAVEL, 46 * scale, 0.30, 0.90);
+  }
+
+  private void sandPockets(World world, Random rnd, int[] surface, int width, int count) {
+    for (int i = 0; i < count; i++) {
+      int x = rnd.nextInt(width);
+      int top = surface[x] + 1;
+      int span = Math.min(4, world.height - 4 - top);
+      if (span <= 0) continue;
+      int y = top + rnd.nextInt(span);
+      int size = 4 + rnd.nextInt(5);
+      for (int step = 0; step < size; step++) {
+        if (world.get(x, y) == DIRT) world.set(x, y, SAND);
+        x = clamp(x + rnd.nextInt(3) - 1, 0, width - 1);
+        y = clamp(y + rnd.nextInt(3) - 1, top, top + span - 1);
       }
     }
   }

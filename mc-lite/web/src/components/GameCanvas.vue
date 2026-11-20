@@ -118,7 +118,7 @@ function loop(now: number) {
   step(player, controls, view, dt);
   updateTarget(dt);
   updateCamera();
-  drawScene(el.getContext('2d')!, view, player, cam, tex, target);
+  drawScene(el.getContext('2d')!, view, player, cam, tex, target, (id) => game.blockDefs.get(id)?.light ?? 0);
   if (now - hudAt > 150) {
     hudAt = now;
     const gx = Math.max(0, Math.min(view.width - 1, Math.floor(player.x)));
@@ -164,10 +164,17 @@ function onKey(e: KeyboardEvent, down: boolean) {
   if (k === 'arrowleft' || k === 'a') controls.left = down;
   else if (k === 'arrowright' || k === 'd') controls.right = down;
   else if (k === 'arrowup' || k === 'w' || k === ' ') controls.jump = down;
-  else if (down && k === 'e') game.craftOpen = !game.craftOpen;
-  else if (down && k === 'q') game.mode = game.mode === 'mine' ? 'place' : 'mine';
-  else if (down && k === 'escape') game.craftOpen = false;
-  else if (down && k >= '1' && k <= '9') {
+  else if (down && k === 'e') {
+    game.craftOpen = !game.craftOpen;
+    if (game.craftOpen) game.postOpen = false;
+  } else if (down && k === 'f') {
+    game.postOpen = !game.postOpen;
+    if (game.postOpen) game.craftOpen = false;
+  } else if (down && k === 'q') game.mode = game.mode === 'mine' ? 'place' : 'mine';
+  else if (down && k === 'escape') {
+    game.craftOpen = false;
+    game.postOpen = false;
+  } else if (down && k >= '1' && k <= '9') {
     const item = game.hotbar[Number(k) - 1];
     if (item) game.selected = item.key;
   } else return;
@@ -191,6 +198,17 @@ function reset() {
 let observer: ResizeObserver | null = null;
 
 watch(() => game.world?.id, reset, { immediate: true });
+
+// 塌方埋人时服务端把玩家顶到堆顶，这里照抄坐标，避免客户端物理和存档各说各话。
+watch(() => game.teleport?.n, () => {
+  const t = game.teleport;
+  if (!t) return;
+  player.x = t.x;
+  player.y = t.y;
+  player.vx = 0;
+  player.vy = 0;
+  sent = { x: t.x, y: t.y };
+});
 
 onMounted(() => {
   resize();

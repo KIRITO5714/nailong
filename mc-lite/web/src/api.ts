@@ -1,4 +1,4 @@
-import type { Content, Mutation, WorldSummary, WorldView } from './types';
+import type { Content, Mutation, OrdersView, WorldSummary, WorldView } from './types';
 
 export class ApiError extends Error {
   constructor(public code: string, message: string) {
@@ -27,5 +27,7 @@ export const api = {
   place: (id: string, x: number, y: number, item: string) =>
     req<Mutation>(`/worlds/${id}/place`, 'POST', { x, y, item }),
   craft: (id: string, recipeId: string) => req<Mutation>(`/worlds/${id}/craft`, 'POST', { recipeId }),
+  orders: (id: string) => req<OrdersView>(`/worlds/${id}/orders`),
+  deliver: (id: string, orderId: string) => req<Mutation>(`/worlds/${id}/deliver`, 'POST', { orderId }),
   move: (id: string, x: number, y: number) => req<{ ok: boolean }>(`/worlds/${id}/move`, 'POST', { x, y }),
 };

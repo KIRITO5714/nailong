@@ -90,6 +90,37 @@ function paintBlock(def: BlockDef) {
       g.fillRect(Math.floor(rnd() * PX), Math.floor(rnd() * PX), 2, 2);
     }
   }
+  if (def.key === 'sand') {
+    for (let i = 0; i < 40; i++) {
+      g.fillStyle = rnd() < 0.5 ? shade(def.color, -22) : shade(def.color, 20);
+      g.fillRect(Math.floor(rnd() * PX), Math.floor(rnd() * PX), 1, 1);
+    }
+    g.fillStyle = def.accent;
+    for (let i = 0; i < 6; i++) g.fillRect(Math.floor(rnd() * (PX - 1)), Math.floor(rnd() * (PX - 1)), 2, 1);
+  }
+  if (def.key === 'gravel') {
+    for (let i = 0; i < 14; i++) {
+      const x = Math.floor(rnd() * (PX - 3));
+      const y = Math.floor(rnd() * (PX - 3));
+      g.fillStyle = rnd() < 0.5 ? def.accent : shade(def.color, 26);
+      g.fillRect(x, y, 3, 2);
+      g.fillStyle = shade(def.color, -30);
+      g.fillRect(x, y + 2, 3, 1);
+    }
+  }
+  if (def.key === 'glow_crystal') {
+    g.fillStyle = shade(def.color, -14);
+    g.fillRect(0, 0, PX, PX);
+    for (const [x, y, h] of [[3, 5, 8], [7, 3, 10], [11, 6, 7]] as const) {
+      g.fillStyle = def.accent;
+      g.fillRect(x, y, 2, h);
+      g.fillRect(x - 1, y + 2, 1, h - 3);
+      g.fillStyle = shade(def.accent, 60);
+      g.fillRect(x, y, 1, h - 2);
+    }
+    g.fillStyle = 'rgba(126,240,255,0.35)';
+    g.fillRect(0, 12, PX, 2);
+  }
   g.fillStyle = 'rgba(255,255,255,0.10)';
   g.fillRect(0, 0, PX, 1);
   g.fillRect(0, 0, 1, PX);

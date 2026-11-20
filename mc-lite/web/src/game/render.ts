@@ -32,6 +32,7 @@ export function drawScene(
   cam: Camera,
   tex: Textures,
   target: Target | null,
+  lightOf: (id: number) => number = () => 0,
 ) {
   const { tile } = cam;
   ctx.imageSmoothingEnabled = false;
@@ -42,6 +43,15 @@ export function drawScene(
   const y0 = Math.max(0, Math.floor(cam.y));
   const y1 = Math.min(view.height - 1, Math.ceil(cam.y + cam.h / tile));
 
+  // 荧光晶是洞穴里的第二光源：先扫一遍可见格收集灯，再算每格黑暗度。
+  const lights: { x: number; y: number; r: number }[] = [];
+  for (let ty = y0; ty <= y1; ty++) {
+    for (let tx = x0; tx <= x1; tx++) {
+      const r = lightOf(view.blocks[ty * view.width + tx]);
+      if (r > 0) lights.push({ x: tx + 0.5, y: ty + 0.5, r });
+    }
+  }
+
   for (let ty = y0; ty <= y1; ty++) {
     for (let tx = x0; tx <= x1; tx++) {
       const sx = Math.round((tx - cam.x) * tile);
@@ -51,6 +61,8 @@ export function drawScene(
       if (id !== 0) {
         const texture = tex.blocks.get(id);
         if (texture) ctx.drawImage(texture, sx, sy, tile, tile);
+        const glow = lightOf(id);
+        if (glow > 0) drawGlow(ctx, sx + tile / 2, sy + tile / 2, glow * tile);
       } else if (depth >= 0) {
         ctx.fillStyle = depth < 6 ? '#3a2c22' : depth < 24 ? '#241d1a' : '#15111a';
         ctx.fillRect(sx, sy, tile, tile);
@@ -58,9 +70,12 @@ export function drawScene(
         continue;
       }
       if (depth > 0) {
-        // 越深越暗，但玩家身边留一圈光，不然深处什么都看不见。
-        const dist = Math.hypot(tx + 0.5 - player.x, ty + 0.5 - player.y);
-        const dark = Math.min(0.66, depth / 44) * Math.max(0.16, Math.min(1, dist / 9));
+        // 越深越暗，但玩家和荧光晶身边留一圈光，不然深处什么都看不见。
+        let falloff = Math.max(0.16, Math.min(1, Math.hypot(tx + 0.5 - player.x, ty + 0.5 - player.y) / 9));
+        for (const l of lights) {
+          falloff = Math.min(falloff, Math.max(0.1, Math.min(1, Math.hypot(tx + 0.5 - l.x, ty + 0.5 - l.y) / l.r)));
+        }
+        const dark = Math.min(0.66, depth / 44) * falloff;
         ctx.fillStyle = `rgba(5,3,10,${dark.toFixed(3)})`;
         ctx.fillRect(sx, sy, tile, tile);
       }
@@ -69,6 +84,18 @@ export function drawScene(
 
   drawPlayer(ctx, player, cam);
   if (target) drawTarget(ctx, target, cam);
+}
+
+function drawGlow(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+  gradient.addColorStop(0, 'rgba(126,240,255,0.30)');
+  gradient.addColorStop(0.4, 'rgba(126,240,255,0.12)');
+  gradient.addColorStop(1, 'rgba(126,240,255,0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+  ctx.restore();
 }
 
 function drawSky(ctx: CanvasRenderingContext2D, cam: Camera, view: WorldView) {

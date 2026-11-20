@@ -18,20 +18,27 @@ public final class Dtos {
 
   public record Craft(@NotBlank String recipeId) {}
 
+  public record Deliver(@NotBlank String orderId) {}
+
   public record Move(double x, double y) {}
 
   public record Player(double x, double y) {}
 
   public record BlockChange(int x, int y, int id) {}
 
+  public record Order(String id, String title, Map<String, Integer> wants, Map<String, Integer> reward, long expiresAt) {}
+
+  public record OrdersView(List<Order> orders, long now) {}
+
   public record WorldView(String id, String name, long seed, int width, int height, int[] blocks,
                           int[] surface, Player player, Map<String, Integer> inventory,
-                          int toolTier, String toolName, double reach) {}
+                          int toolTier, String toolName, double reach, List<Order> orders, long now) {}
 
   public record WorldSummary(String id, String name, long seed, int width, int height, Instant updatedAt) {}
 
   public record Mutation(boolean ok, List<BlockChange> changes, Map<String, Integer> inventory,
-                         int toolTier, String toolName, String drop, String message) {}
+                         int toolTier, String toolName, String drop, String message,
+                         Player player, List<Order> orders) {}
 
   public record Ack(boolean ok, Player player) {}
 

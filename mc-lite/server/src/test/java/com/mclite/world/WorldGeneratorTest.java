@@ -25,7 +25,8 @@ class WorldGeneratorTest {
       assertThat(world.get(x, world.height - 3)).isEqualTo(10);
       // 地形线只认土层：树冠再高也不影响它，树冠下的空气仍然是天空。
       assertThat(world.get(x, surface[x])).isEqualTo(1);
-      assertThat(world.get(x, surface[x] + 1)).isEqualTo(2);
+      // 地表下一格是泥土或沙囊，两者都算土层。
+      assertThat(world.get(x, surface[x] + 1)).isIn(2, 13);
       assertThat(surface[x]).isBetween(6, world.height - 24);
     }
   }
@@ -33,12 +34,14 @@ class WorldGeneratorTest {
   @Test
   void everyOreTypeExistsAndOnlyInsideStone() {
     World world = generator.generate(42L, 160, 96);
-    int[] counts = new int[13];
+    int[] counts = new int[16];
     for (int id : world.blocks) counts[id]++;
     assertThat(counts[6]).isPositive();
     assertThat(counts[7]).isPositive();
     assertThat(counts[8]).isPositive();
     assertThat(counts[9]).isPositive();
+    assertThat(counts[13]).isPositive();
+    assertThat(counts[14]).isPositive();
     assertThat(counts[4]).isPositive();
     assertThat(counts[5]).isPositive();
     assertThat(counts[1] + counts[2] + counts[3] + counts[6] + counts[7] + counts[8] + counts[9] + counts[10])
@@ -73,6 +76,22 @@ class WorldGeneratorTest {
         World.decodeSurface(world.encodeSurface(), world.width));
     assertThat(copy.blocks).isEqualTo(world.blocks);
     assertThat(copy.surface()).isEqualTo(world.surface());
+  }
+
+  @Test
+  void loosePocketsRestOnSolidGround() {
+    World world = generator.generate(42L, 160, 96);
+    int loose = 0;
+    for (int y = 0; y < world.height - 1; y++) {
+      for (int x = 0; x < world.width; x++) {
+        int id = world.get(x, y);
+        if (id == 13 || id == 14) {
+          loose++;
+          assertThat(world.get(x, y + 1)).isNotZero();
+        }
+      }
+    }
+    assertThat(loose).isPositive();
   }
 
   private double avgDepth(World world, int id) {

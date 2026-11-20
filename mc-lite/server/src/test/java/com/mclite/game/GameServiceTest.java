@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mclite.api.Dtos;
 import com.mclite.world.World;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -154,6 +155,139 @@ class GameServiceTest {
   @Test
   void sameSeedCreatesIdenticalWorlds() {
     assertThat(game.create("另一份", 42L).blocks()).isEqualTo(game.load(id).blocks());
+  }
+
+  @Test
+  void sandColumnFallsIntoMinedGap() {
+    int x = spawnX + 4;
+    game.move(id, x + 0.5, groundY + 1.5);
+    paint(x, groundY + 1, 13);
+    paint(x, groundY + 2, 13);
+    paint(x, groundY + 3, 0);
+    paint(x, groundY + 4, 3);
+    Dtos.Mutation result = game.mine(id, x, groundY + 2);
+    assertThat(result.changes()).contains(new Dtos.BlockChange(x, groundY + 1, 0), new Dtos.BlockChange(x, groundY + 3, 13));
+    assertThat(world().get(x, groundY + 3)).isEqualTo(13);
+    assertThat(world().get(x, groundY + 1)).isZero();
+    assertThat(world().get(x, groundY + 4)).isEqualTo(3);
+  }
+
+  @Test
+  void pillarHoldsLooseColumnUntilItIsMined() {
+    int x = spawnX + 4;
+    game.move(id, x + 0.5, groundY + 1.5);
+    paint(x, groundY + 1, 13);
+    paint(x, groundY + 2, 0);
+    paint(x, groundY + 3, 3);
+    paint(x, groundY + 4, 3);
+    paint(x - 1, groundY, 1);
+    game.mine(id, x - 1, groundY);
+    // 沙先落到柱顶停住：柱子还在，就不会继续往下塌。
+    assertThat(world().get(x, groundY + 2)).isEqualTo(13);
+    assertThat(world().get(x, groundY + 1)).isZero();
+    give("wood_pickaxe", 1);
+    game.mine(id, x, groundY + 3);
+    assertThat(world().get(x, groundY + 3)).isEqualTo(13);
+    assertThat(world().get(x, groundY + 2)).isZero();
+  }
+
+  @Test
+  void cohesiveDirtDoesNotFall() {
+    int x = spawnX + 4;
+    game.move(id, x + 0.5, groundY + 1.5);
+    paint(x, groundY + 1, 2);
+    paint(x, groundY + 2, 0);
+    paint(x - 1, groundY, 1);
+    game.mine(id, x - 1, groundY);
+    assertThat(world().get(x, groundY + 1)).isEqualTo(2);
+  }
+
+  @Test
+  void buriedPlayerIsPushedToTopOfTheFallenStack() {
+    paint(spawnX, groundY - 3, 13);
+    paint(spawnX, groundY - 2, 13);
+    paint(spawnX + 1, groundY, 1);
+    Dtos.Mutation result = game.mine(id, spawnX + 1, groundY);
+    assertThat(result.player()).isNotNull();
+    assertThat(result.player().y()).isLessThan(groundY - 2);
+    assertThat(result.message()).contains("塌方");
+    assertThat(game.load(id).player().y()).isEqualTo(result.player().y());
+  }
+
+  @Test
+  void placedSandFallsUntilItRests() {
+    int x = spawnX + 2;
+    game.move(id, x + 0.5, groundY - 1.5);
+    for (int y = groundY - 4; y < groundY; y++) paint(x, y, 0);
+    paint(x, groundY, 1);
+    give("sand", 1);
+    game.place(id, x, groundY - 4, "sand");
+    assertThat(world().get(x, groundY - 1)).isEqualTo(13);
+    assertThat(world().get(x, groundY - 4)).isZero();
+  }
+
+  @Test
+  void ordersStartAtThreeAndDeliverPaysReward() {
+    Dtos.WorldView view = game.load(id);
+    assertThat(view.orders()).hasSize(3);
+    Dtos.Order first = view.orders().get(0);
+    first.wants().forEach((key, count) -> give(key, count));
+    Dtos.Mutation result = game.deliver(id, first.id());
+    assertThat(result.message()).contains("委托");
+    assertThat(result.orders()).hasSize(3);
+    assertThat(result.orders()).extracting(Dtos.Order::id).doesNotContain(first.id());
+    first.reward().forEach((key, count) -> assertThat(result.inventory()).containsEntry(key, count));
+    first.wants().keySet().forEach(key -> assertThat(result.inventory()).doesNotContainKey(key));
+  }
+
+  @Test
+  void deliverWithoutGoodsOrUnknownOrderIsRejected() {
+    Dtos.Order first = game.load(id).orders().get(0);
+    assertCode(() -> game.deliver(id, first.id()), "NO_MATERIAL");
+    assertCode(() -> game.deliver(id, "nope"), "UNKNOWN_ORDER");
+  }
+
+  @Test
+  void expiredOrdersAreReplacedOnLoad() throws Exception {
+    WorldEntity entity = repo.findById(id).orElseThrow();
+    List<Dtos.Order> old = mapper.readValue(entity.getOrdersJson(), new TypeReference<List<Dtos.Order>>() {});
+    List<Dtos.Order> expired = old.stream()
+        .map(o -> new Dtos.Order(o.id(), o.title(), o.wants(), o.reward(), 1L)).toList();
+    entity.setOrdersJson(mapper.writeValueAsString(expired));
+    repo.save(entity);
+    Dtos.WorldView view = game.load(id);
+    assertThat(view.orders()).hasSize(3);
+    List<String> ids = view.orders().stream().map(Dtos.Order::id).toList();
+    assertThat(old.stream().map(Dtos.Order::id).noneMatch(ids::contains)).isTrue();
+  }
+
+  @Test
+  void deliveringAnExpiredOrderIsRejected() throws Exception {
+    WorldEntity entity = repo.findById(id).orElseThrow();
+    List<Dtos.Order> old = mapper.readValue(entity.getOrdersJson(), new TypeReference<List<Dtos.Order>>() {});
+    Dtos.Order stale = new Dtos.Order(old.get(0).id(), old.get(0).title(), old.get(0).wants(), old.get(0).reward(), 1L);
+    List<Dtos.Order> mixed = new java.util.ArrayList<>(old);
+    mixed.set(0, stale);
+    entity.setOrdersJson(mapper.writeValueAsString(mixed));
+    repo.save(entity);
+    assertCode(() -> game.deliver(id, stale.id()), "ORDER_EXPIRED");
+  }
+
+  @Test
+  void orderBoardNeverShowsDuplicateTitles() {
+    for (long seed : new long[] {1L, 42L, 7L, 99L, 2026L}) {
+      Dtos.WorldView view = game.create("单号测试", seed);
+      assertThat(view.orders()).hasSize(3);
+      assertThat(view.orders().stream().map(Dtos.Order::title).toList()).doesNotHaveDuplicates();
+      game.delete(view.id());
+    }
+  }
+
+  private World world() {
+    WorldEntity entity = repo.findById(id).orElseThrow();
+    return new World(entity.getWidth(), entity.getHeight(),
+        World.decode(entity.getBlocks(), entity.getWidth(), entity.getHeight()),
+        World.decodeSurface(entity.getSurfaceLine(), entity.getWidth()));
   }
 
   private Dtos.Mutation mineOre(int blockId) {

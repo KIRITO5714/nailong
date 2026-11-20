@@ -10,6 +10,8 @@ export interface BlockDef {
   top?: boolean;
   vertical?: boolean;
   ore?: boolean;
+  falls?: boolean;
+  light?: number;
 }
 
 export interface ItemDef {
@@ -43,6 +45,19 @@ export interface Content {
   $simplifications?: string[];
 }
 
+export interface Order {
+  id: string;
+  title: string;
+  wants: Record<string, number>;
+  reward: Record<string, number>;
+  expiresAt: number;
+}
+
+export interface OrdersView {
+  orders: Order[];
+  now: number;
+}
+
 export interface WorldView {
   id: string;
   name: string;
@@ -56,6 +71,8 @@ export interface WorldView {
   toolTier: number;
   toolName: string;
   reach: number;
+  orders: Order[];
+  now: number;
 }
 
 export interface WorldSummary {
@@ -81,4 +98,6 @@ export interface Mutation {
   toolName: string;
   drop: string | null;
   message: string;
+  player: { x: number; y: number } | null;
+  orders: Order[] | null;
 }

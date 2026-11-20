@@ -1,7 +1,5 @@
 package com.mclite.game;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mclite.api.Dtos;
 import com.mclite.content.BlockDef;
 import com.mclite.content.ContentRegistry;
@@ -24,25 +22,22 @@ import org.springframework.stereotype.Service;
 @Service
 public class GameService {
 
-  private static final double HALF_W = 0.3;
-  private static final double HALF_H = 0.9;
-
   private final ContentRegistry content;
   private final WorldRepository repo;
-  private final ObjectMapper mapper;
+  private final WorldViews views;
   private final WorldGenerator generator = new WorldGenerator();
   private final Map<String, Object> locks = new ConcurrentHashMap<>();
   private final int width;
   private final int height;
   private final double reach;
 
-  public GameService(ContentRegistry content, WorldRepository repo, ObjectMapper mapper,
+  public GameService(ContentRegistry content, WorldRepository repo, WorldViews views,
                      @Value("${mclite.world.width}") int width,
                      @Value("${mclite.world.height}") int height,
                      @Value("${mclite.world.reach}") double reach) {
     this.content = content;
     this.repo = repo;
-    this.mapper = mapper;
+    this.views = views;
     this.width = width;
     this.height = height;
     this.reach = reach;
@@ -61,12 +56,14 @@ public class GameService {
     entity.setBlocks(world.encode());
     entity.setSurfaceLine(world.encodeSurface());
     entity.setInventoryJson("{}");
+    OrderBoard.Board board = OrderBoard.initial(content, actualSeed, System.currentTimeMillis());
+    views.persistBoard(entity, board);
     entity.setPlayerX(spawn[0]);
     entity.setPlayerY(spawn[1]);
     entity.setCreatedAt(Instant.now());
     entity.setUpdatedAt(Instant.now());
     repo.save(entity);
-    return view(entity, world, new LinkedHashMap<>());
+    return views.view(entity, world, new LinkedHashMap<>());
   }
 
   public List<Dtos.WorldSummary> list() {
@@ -77,7 +74,7 @@ public class GameService {
 
   public Dtos.WorldView load(String id) {
     Session s = open(id);
-    return view(s.entity(), s.world(), s.inventory());
+    return views.view(s.entity(), s.world(), s.inventory());
   }
 
   public void delete(String id) {
@@ -93,7 +90,7 @@ public class GameService {
       BlockDef def = content.block(current);
       if (!def.breakable()) throw new GameException("UNBREAKABLE", def.name() + "挖不动");
       checkReach(s, x, y);
-      int tier = toolTier(s.inventory());
+      int tier = Inventories.tier(content, s.inventory());
       if (tier < def.tier()) {
         throw new GameException("TOOL_TOO_WEAK",
             "挖" + def.name() + "需要" + content.tool(def.tier()).name() + "，你现在只有" + content.tool(tier).name());
@@ -101,14 +98,19 @@ public class GameService {
       s.world().set(x, y, 0);
       String dropName = null;
       if (def.drop() != null) {
-        add(s.inventory(), def.drop(), 1);
+        Inventories.add(s.inventory(), def.drop(), 1);
         dropName = content.item(def.drop()).name();
       }
+      List<Dtos.BlockChange> changes = new ArrayList<>();
+      changes.add(new Dtos.BlockChange(x, y, 0));
+      changes.addAll(Collapse.settle(s.world(), content));
+      Dtos.Player pushed = pushOut(s, changes);
       save(s);
       String message = dropName == null
           ? def.name() + "碎了一地，什么也没留下"
           : "挖掉" + def.name() + "，背包 +1 " + dropName;
-      return mutation(s, List.of(new Dtos.BlockChange(x, y, 0)), dropName, message);
+      if (pushed != null) message += "；塌方把你顶到了堆顶";
+      return views.mutation(s.inventory(), changes, dropName, message, pushed, null);
     }
   }
 
@@ -122,11 +124,19 @@ public class GameService {
       if (!s.world().inBounds(x, y)) throw new GameException("OUT_OF_BOUNDS", "那里在世界之外");
       if (s.world().get(x, y) != 0) throw new GameException("NOT_EMPTY", "那一格已经有方块了");
       checkReach(s, x, y);
-      if (overlapsPlayer(s, x, y)) throw new GameException("BLOCKED_BY_PLAYER", "不能把方块放在自己身上");
-      take(s.inventory(), itemKey, 1);
+      if (PlayerBox.overlaps(s.entity().getPlayerX(), s.entity().getPlayerY(), x, y)) {
+        throw new GameException("BLOCKED_BY_PLAYER", "不能把方块放在自己身上");
+      }
+      Inventories.take(s.inventory(), itemKey, 1);
       s.world().set(x, y, item.place());
+      List<Dtos.BlockChange> changes = new ArrayList<>();
+      changes.add(new Dtos.BlockChange(x, y, item.place()));
+      changes.addAll(Collapse.settle(s.world(), content));
+      Dtos.Player pushed = pushOut(s, changes);
       save(s);
-      return mutation(s, List.of(new Dtos.BlockChange(x, y, item.place())), null, "放下了" + item.name());
+      String message = "放下了" + item.name();
+      if (pushed != null) message += "；塌方把你顶到了堆顶";
+      return views.mutation(s.inventory(), changes, null, message, pushed, null);
     }
   }
 
@@ -138,22 +148,51 @@ public class GameService {
       if (recipe.needsWorkbench() && !nearWorkbench(s)) {
         throw new GameException("NEEDS_WORKBENCH", "这个配方要站在工作台旁边才能合成");
       }
-      List<String> missing = new ArrayList<>();
-      for (Map.Entry<String, Integer> need : recipe.in().entrySet()) {
-        int have = s.inventory().getOrDefault(need.getKey(), 0);
-        if (have < need.getValue()) {
-          missing.add(content.item(need.getKey()).name() + "×" + (need.getValue() - have));
-        }
-      }
+      List<String> missing = Inventories.missing(content, s.inventory(), recipe.in());
       if (!missing.isEmpty()) throw new GameException("NO_MATERIAL", "材料不够，还差 " + String.join("、", missing));
-      int before = toolTier(s.inventory());
-      recipe.in().forEach((key, count) -> take(s.inventory(), key, count));
-      recipe.out().forEach((key, count) -> add(s.inventory(), key, count));
-      int after = toolTier(s.inventory());
+      int before = Inventories.tier(content, s.inventory());
+      recipe.in().forEach((key, count) -> Inventories.take(s.inventory(), key, count));
+      recipe.out().forEach((key, count) -> Inventories.add(s.inventory(), key, count));
+      int after = Inventories.tier(content, s.inventory());
       save(s);
       String message = "合成了" + recipe.name();
       if (after > before) message += "，工具升级成" + content.tool(after).name();
-      return mutation(s, List.of(), null, message);
+      return views.mutation(s.inventory(), List.of(), null, message, null, null);
+    }
+  }
+
+  public Dtos.OrdersView orders(String id) {
+    synchronized (lock(id)) {
+      Session s = open(id);
+      long now = System.currentTimeMillis();
+      OrderBoard.Board board = OrderBoard.refresh(views.readOrders(s.entity().getOrdersJson()),
+          OrderBoard.seqOf(s.entity().getOrderSeq()), s.entity().getSeed(), now, content);
+      views.persistBoard(s.entity(), board);
+      save(s);
+      return new Dtos.OrdersView(board.orders(), now);
+    }
+  }
+
+  public Dtos.Mutation deliver(String id, String orderId) {
+    synchronized (lock(id)) {
+      Session s = open(id);
+      long now = System.currentTimeMillis();
+      List<Dtos.Order> orders = views.readOrders(s.entity().getOrdersJson());
+      Dtos.Order order = orders.stream().filter(o -> o.id().equals(orderId)).findFirst()
+          .orElseThrow(() -> new GameException("UNKNOWN_ORDER", "没有这张委托单"));
+      if (order.expiresAt() <= now) throw new GameException("ORDER_EXPIRED", "这单已经过期，邮差换了新委托");
+      List<String> missing = Inventories.missing(content, s.inventory(), order.wants());
+      if (!missing.isEmpty()) throw new GameException("NO_MATERIAL", "货不够，还差 " + String.join("、", missing));
+      order.wants().forEach((key, count) -> Inventories.take(s.inventory(), key, count));
+      order.reward().forEach((key, count) -> Inventories.add(s.inventory(), key, count));
+      List<Dtos.Order> left = new ArrayList<>(orders);
+      left.remove(order);
+      OrderBoard.Board board = OrderBoard.refresh(left, OrderBoard.seqOf(s.entity().getOrderSeq()),
+          s.entity().getSeed(), now, content);
+      views.persistBoard(s.entity(), board);
+      save(s);
+      String message = "委托「" + order.title() + "」完成！邮差留下 " + Inventories.describe(content, order.reward());
+      return views.mutation(s.inventory(), List.of(), null, message, null, board.orders());
     }
   }
 
@@ -161,8 +200,8 @@ public class GameService {
   public Dtos.Ack move(String id, double x, double y) {
     synchronized (lock(id)) {
       Session s = open(id);
-      double px = Math.max(HALF_W, Math.min(width - HALF_W, x));
-      double py = Math.max(HALF_H, Math.min(height - HALF_H, y));
+      double px = Math.max(PlayerBox.HALF_W, Math.min(width - PlayerBox.HALF_W, x));
+      double py = Math.max(PlayerBox.HALF_H, Math.min(height - PlayerBox.HALF_H, y));
       s.entity().setPlayerX(px);
       s.entity().setPlayerY(py);
       save(s);
@@ -182,65 +221,28 @@ public class GameService {
     World world = new World(entity.getWidth(), entity.getHeight(),
         World.decode(entity.getBlocks(), entity.getWidth(), entity.getHeight()),
         World.decodeSurface(entity.getSurfaceLine(), entity.getWidth()));
-    return new Session(entity, world, readInventory(entity.getInventoryJson()));
+    return new Session(entity, world, views.readInventory(entity.getInventoryJson()));
   }
 
   private void save(Session s) {
     s.entity().setBlocks(s.world().encode());
-    s.entity().setInventoryJson(writeInventory(s.inventory()));
+    s.entity().setInventoryJson(views.writeInventory(s.inventory()));
     s.entity().setUpdatedAt(Instant.now());
     repo.save(s.entity());
   }
 
-  private Map<String, Integer> readInventory(String json) {
-    if (json == null || json.isBlank()) return new LinkedHashMap<>();
-    try {
-      return mapper.readValue(json, new TypeReference<LinkedHashMap<String, Integer>>() {});
-    } catch (Exception e) {
-      throw new IllegalStateException("背包存档读不出来", e);
-    }
-  }
-
-  private String writeInventory(Map<String, Integer> inventory) {
-    try {
-      return mapper.writeValueAsString(inventory);
-    } catch (Exception e) {
-      throw new IllegalStateException("背包存档写不进去", e);
-    }
-  }
-
-  private Dtos.WorldView view(WorldEntity e, World world, Map<String, Integer> inventory) {
-    int tier = toolTier(inventory);
-    return new Dtos.WorldView(e.getId(), e.getName(), e.getSeed(), world.width, world.height,
-        world.blocks, world.surface(), new Dtos.Player(e.getPlayerX(), e.getPlayerY()),
-        inventory, tier, content.tool(tier).name(), reach);
-  }
-
-  private Dtos.Mutation mutation(Session s, List<Dtos.BlockChange> changes, String drop, String message) {
-    int tier = toolTier(s.inventory());
-    return new Dtos.Mutation(true, changes, s.inventory(), tier, content.tool(tier).name(), drop, message);
-  }
-
-  // 工具等级 = 背包里最高级的镐，不做手动装备，少一层 UI 也少一类 bug。
-  private int toolTier(Map<String, Integer> inventory) {
-    int tier = 0;
-    for (Map.Entry<String, Integer> entry : inventory.entrySet()) {
-      ItemDef item = content.item(entry.getKey());
-      if (item != null && item.tool() != null && entry.getValue() > 0) tier = Math.max(tier, item.tool());
-    }
-    return tier;
+  private Dtos.Player pushOut(Session s, List<Dtos.BlockChange> changes) {
+    double[] pos = PlayerBox.unbury(s.world(), s.entity().getPlayerX(), s.entity().getPlayerY(), changes);
+    if (pos == null) return null;
+    s.entity().setPlayerX(pos[0]);
+    s.entity().setPlayerY(pos[1]);
+    return new Dtos.Player(pos[0], pos[1]);
   }
 
   private void checkReach(Session s, int x, int y) {
     double dx = x + 0.5 - s.entity().getPlayerX();
     double dy = y + 0.5 - s.entity().getPlayerY();
     if (Math.hypot(dx, dy) > reach) throw new GameException("OUT_OF_RANGE", "太远了，走近一点再动手");
-  }
-
-  private boolean overlapsPlayer(Session s, int x, int y) {
-    double px = s.entity().getPlayerX();
-    double py = s.entity().getPlayerY();
-    return x < px + HALF_W && x + 1 > px - HALF_W && y < py + HALF_H && y + 1 > py - HALF_H;
   }
 
   private boolean nearWorkbench(Session s) {
@@ -254,15 +256,5 @@ public class GameService {
       }
     }
     return false;
-  }
-
-  private void add(Map<String, Integer> inventory, String key, int count) {
-    inventory.merge(key, count, Integer::sum);
-  }
-
-  private void take(Map<String, Integer> inventory, String key, int count) {
-    int left = inventory.getOrDefault(key, 0) - count;
-    if (left > 0) inventory.put(key, left);
-    else inventory.remove(key);
   }
 }

@@ -16,12 +16,14 @@ import org.springframework.stereotype.Component;
 public class ContentRegistry {
 
   private final JsonNode raw;
+  private final ObjectMapper mapper;
   private final Map<Integer, BlockDef> blocksById;
   private final Map<String, ItemDef> items;
   private final Map<Integer, ToolDef> toolsByTier;
   private final Map<String, RecipeDef> recipes;
 
   public ContentRegistry(ObjectMapper mapper) throws IOException {
+    this.mapper = mapper;
     try (InputStream in = new ClassPathResource("content.json").getInputStream()) {
       raw = mapper.readTree(in);
     }
@@ -64,5 +66,17 @@ public class ContentRegistry {
 
   public int workbenchBlockId() {
     return blocksById.values().stream().filter(b -> b.key().equals("workbench")).findFirst().orElseThrow().id();
+  }
+
+  public JsonNode orders() {
+    return raw.get("orders");
+  }
+
+  public int orderSlots() {
+    return orders().get("slots").asInt(3);
+  }
+
+  public Map<String, Integer> counts(JsonNode node) {
+    return mapper.convertValue(node, new TypeReference<LinkedHashMap<String, Integer>>() {});
   }
 }
