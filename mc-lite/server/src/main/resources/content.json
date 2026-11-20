@@ -1,0 +1,53 @@
+{
+  "$comment": "内容与规则表：改方块/物品/工具/配方只动这个文件，Java 代码不需要改。hardness 是徒手基准毫秒，tier 是所需工具等级，drop 是挖掉后进背包的物品 key（null 表示不掉东西）。",
+  "blocks": [
+    { "id": 1, "key": "grass", "name": "草方块", "hardness": 350, "tier": 0, "drop": "dirt", "color": "#8b5a2b", "accent": "#6abe30", "top": true },
+    { "id": 2, "key": "dirt", "name": "泥土", "hardness": 300, "tier": 0, "drop": "dirt", "color": "#8b5a2b", "accent": "#6f4520" },
+    { "id": 3, "key": "stone", "name": "石头", "hardness": 900, "tier": 1, "drop": "stone", "color": "#8d8d94", "accent": "#6f6f78" },
+    { "id": 4, "key": "log", "name": "木头", "hardness": 600, "tier": 0, "drop": "log", "color": "#6b4a2a", "accent": "#8a6238", "vertical": true },
+    { "id": 5, "key": "leaves", "name": "树叶", "hardness": 150, "tier": 0, "drop": null, "color": "#3f8f3a", "accent": "#57b04a" },
+    { "id": 6, "key": "coal_ore", "name": "煤矿", "hardness": 1100, "tier": 1, "drop": "coal", "color": "#8d8d94", "accent": "#2b2b30", "ore": true },
+    { "id": 7, "key": "iron_ore", "name": "铁矿", "hardness": 1500, "tier": 2, "drop": "iron", "color": "#8d8d94", "accent": "#d8a878", "ore": true },
+    { "id": 8, "key": "gold_ore", "name": "金矿", "hardness": 1700, "tier": 3, "drop": "gold", "color": "#8d8d94", "accent": "#f2d24b", "ore": true },
+    { "id": 9, "key": "diamond_ore", "name": "钻石矿", "hardness": 2200, "tier": 3, "drop": "diamond", "color": "#8d8d94", "accent": "#5fe3e0", "ore": true },
+    { "id": 10, "key": "bedrock", "name": "基岩", "hardness": -1, "tier": 99, "drop": null, "color": "#3a3a42", "accent": "#23232a" },
+    { "id": 11, "key": "planks", "name": "木板", "hardness": 500, "tier": 0, "drop": "planks", "color": "#b8873f", "accent": "#96692c", "vertical": false },
+    { "id": 12, "key": "workbench", "name": "工作台", "hardness": 600, "tier": 0, "drop": "workbench", "color": "#b8873f", "accent": "#6b4a2a", "top": true }
+  ],
+  "items": {
+    "dirt": { "name": "泥土", "color": "#8b5a2b", "accent": "#6f4520", "place": 2 },
+    "stone": { "name": "石头", "color": "#8d8d94", "accent": "#6f6f78", "place": 3 },
+    "log": { "name": "木头", "color": "#6b4a2a", "accent": "#8a6238", "place": 4 },
+    "planks": { "name": "木板", "color": "#b8873f", "accent": "#96692c", "place": 11 },
+    "workbench": { "name": "工作台", "color": "#b8873f", "accent": "#6b4a2a", "place": 12 },
+    "coal": { "name": "煤炭", "color": "#2b2b30", "accent": "#4a4a52" },
+    "iron": { "name": "铁锭", "color": "#d8a878", "accent": "#f0c8a0" },
+    "gold": { "name": "金锭", "color": "#f2d24b", "accent": "#fff0a0" },
+    "diamond": { "name": "钻石", "color": "#5fe3e0", "accent": "#b8fffd" },
+    "wood_pickaxe": { "name": "木镐", "color": "#b8873f", "accent": "#6b4a2a", "tool": 1 },
+    "stone_pickaxe": { "name": "石镐", "color": "#8d8d94", "accent": "#6b4a2a", "tool": 2 },
+    "iron_pickaxe": { "name": "铁镐", "color": "#d8a878", "accent": "#6b4a2a", "tool": 3 },
+    "diamond_pickaxe": { "name": "钻石镐", "color": "#5fe3e0", "accent": "#6b4a2a", "tool": 4 }
+  },
+  "tools": [
+    { "tier": 0, "key": "hand", "name": "徒手", "speed": 1.0 },
+    { "tier": 1, "key": "wood_pickaxe", "name": "木镐", "speed": 1.6 },
+    { "tier": 2, "key": "stone_pickaxe", "name": "石镐", "speed": 2.4 },
+    { "tier": 3, "key": "iron_pickaxe", "name": "铁镐", "speed": 3.4 },
+    { "tier": 4, "key": "diamond_pickaxe", "name": "钻石镐", "speed": 4.8 }
+  ],
+  "recipes": [
+    { "id": "planks", "name": "木板 ×4", "in": { "log": 1 }, "out": { "planks": 4 }, "needsWorkbench": false },
+    { "id": "workbench", "name": "工作台", "in": { "planks": 4 }, "out": { "workbench": 1 }, "needsWorkbench": false },
+    { "id": "wood_pickaxe", "name": "木镐", "in": { "planks": 3 }, "out": { "wood_pickaxe": 1 }, "needsWorkbench": true },
+    { "id": "stone_pickaxe", "name": "石镐", "in": { "stone": 3, "planks": 2 }, "out": { "stone_pickaxe": 1 }, "needsWorkbench": true },
+    { "id": "iron_pickaxe", "name": "铁镐", "in": { "iron": 3, "planks": 2 }, "out": { "iron_pickaxe": 1 }, "needsWorkbench": true },
+    { "id": "diamond_pickaxe", "name": "钻石镐", "in": { "diamond": 3, "planks": 2 }, "out": { "diamond_pickaxe": 1 }, "needsWorkbench": true }
+  ],
+  "$simplifications": [
+    "矿石直接掉锭，不做熔炉与燃料——简易版省掉冶炼这一层。",
+    "镐只用木板/矿石合成，不做木棍。",
+    "工具等级自动取背包里最高级的镐，不需要手动装备。",
+    "树叶挖掉不掉东西，也不掉树苗。"
+  ]
+}
