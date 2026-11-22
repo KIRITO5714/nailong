@@ -40,7 +40,7 @@ body {
 .brand span { margin-left: 6px; font-size: 11px; color: var(--muted); font-weight: 400; }
 .world-name { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.tool-badge {
+.weapon-badge {
   margin-left: auto;
   padding: 4px 10px;
   border: 2px solid var(--line);
@@ -140,7 +140,38 @@ body {
   background: rgba(12, 15, 22, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
-.stage-mode { color: var(--accent); }
+
+/* 血条：外层是槽，内层宽度按当前血量百分比 */
+.stage-hp { position: relative; width: 132px; padding: 0 !important; height: 20px; overflow: hidden; }
+.stage-hp i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(#e8635a, #b8332c);
+  transition: width 0.18s;
+}
+.stage-hp b {
+  position: relative;
+  display: block;
+  font-size: 11px;
+  line-height: 20px;
+  text-align: center;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+}
+
+.dead {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  justify-items: center;
+  background: rgba(10, 6, 8, 0.78);
+  text-align: center;
+}
+.dead-title { margin: 0; font-size: 26px; font-weight: 700; color: #ff9c8a; letter-spacing: 2px; }
+.dead-note { margin: 0; font-size: 13px; color: var(--muted); }
 
 .stage-tip {
   position: absolute;
@@ -178,7 +209,7 @@ body {
   cursor: pointer;
 }
 .slot img { width: 100%; height: 100%; image-rendering: pixelated; display: block; }
-.slot.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(106, 190, 48, 0.3); }
+.slot.armed { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(106, 190, 48, 0.3); }
 .slot-count {
   position: absolute;
   right: 2px;
@@ -227,7 +258,8 @@ body {
 }
 .pad:active { background: rgba(61, 122, 42, 0.85); border-color: var(--accent); }
 .pad-jump { width: 74px; }
-.pad-mode { font-size: 17px; color: var(--accent); }
+.pad-attack { width: 78px; font-size: 19px; color: #ffd9c9; background: rgba(122, 44, 38, 0.82); }
+.pad-attack:active { background: rgba(184, 51, 44, 0.9); border-color: var(--warn); }
 
 @media (hover: hover) and (pointer: fine) {
   .touch { display: none; }
@@ -290,7 +322,7 @@ body {
 @media (max-width: 640px) {
   .topbar { flex-wrap: wrap; gap: 6px; padding: 6px 8px; }
   .world-name { order: 3; flex-basis: 100%; }
-  .tool-badge { margin-left: auto; }
+  .weapon-badge { margin-left: auto; }
   .btn { padding: 6px 9px; font-size: 12px; }
   .stage-tip { display: none; }
   .slot { width: 50px; height: 50px; }

@@ -3,26 +3,43 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useGame } from '../stores/game';
 import { controls, releaseAll } from '../game/controls';
 import { buildTextures, type Textures } from '../game/textures';
-import { createPlayer, step, type Player } from '../game/physics';
-import { drawScene, type Camera, type Target } from '../game/render';
+import { createPlayer, knockback, step, type Player } from '../game/physics';
+import { MAX_MOBS, prune, spawnOne, stepMobs, swing, type Mob, type MobEvents } from '../game/mobs';
+import { drawScene, type Camera, type Swing } from '../game/render';
 
 const game = useGame();
 const canvasEl = ref<HTMLCanvasElement | null>(null);
-const hud = ref({ x: 0, y: 0, depth: 0 });
+const hud = ref({ x: 0, y: 0, hp: 100, mobs: 0 });
 
-let player: Player = createPlayer(80, 30);
+let player: Player = createPlayer(240, 30);
+let mobs: Mob[] = [];
 let tex: Textures | null = null;
 let cam: Camera = { x: 0, y: 0, tile: 32, w: 800, h: 600 };
 let raf = 0;
 let last = 0;
 let hudAt = 0;
 let syncAt = 0;
-let sent = { x: 0, y: 0 };
-let target: Target | null = null;
-let progress = 0;
-let mining = false;
-let lastPlaced = '';
-const pointer = { down: false, place: false, cx: 0, cy: 0 };
+let spawnAt = 0;
+let cooldown = 0;
+let swingAnim: Swing | null = null;
+let sent = { x: 0, y: 0, hp: 100 };
+let hp = 100;
+
+// 血量在客户端结算（和物理同层），归零就进死亡态；服务端只在 move 时收到最新血量。
+const events: MobEvents = {
+  onPlayerHurt(damage, fromX) {
+    if (game.dead) return;
+    hp = Math.max(0, hp - damage);
+    knockback(player, fromX, 6.5);
+    if (hp <= 0) {
+      game.dead = true;
+      game.syncPlayer(player.x, player.y, 0);
+    }
+  },
+  onKill(def) {
+    void game.reportKill(def.key);
+  },
+};
 
 function resize() {
   const el = canvasEl.value;
@@ -40,60 +57,27 @@ function resize() {
   cam.tile = Math.max(20, Math.min(48, Math.round(w / (w < 720 ? 12 : 24))));
 }
 
-function tileAt(cx: number, cy: number) {
-  const rect = canvasEl.value!.getBoundingClientRect();
-  return {
-    x: Math.floor(cam.x + (cx - rect.left) / cam.tile),
-    y: Math.floor(cam.y + (cy - rect.top) / cam.tile),
-  };
+// 挥砍冷却取当前武器的 cooldown，比服务端限频更严，所以上报永远不会被拒。
+function trySwing(dt: number) {
+  cooldown = Math.max(0, cooldown - dt);
+  if (swingAnim) {
+    swingAnim.t -= dt * 4;
+    if (swingAnim.t <= 0) swingAnim = null;
+  }
+  if (!controls.attack) return;
+  controls.attack = false;
+  const weapon = game.weapon;
+  if (cooldown > 0 || game.dead || !weapon) return;
+  cooldown = weapon.cooldown;
+  swingAnim = { t: 1, facing: player.facing, range: weapon.range };
+  swing(mobs, player, weapon, events);
 }
 
-// 客户端先算一遍能不能挖，是为了立刻给出红框/灰框反馈；真正的判定仍在服务端。
-function updateTarget(dt: number) {
-  const view = game.world;
-  if (!view || !pointer.down) {
-    target = null;
-    progress = 0;
-    return;
-  }
-  const { x, y } = tileAt(pointer.cx, pointer.cy);
-  if (x < 0 || y < 0 || x >= view.width || y >= view.height) {
-    target = null;
-    progress = 0;
-    return;
-  }
-  const id = view.blocks[y * view.width + x];
-  const far = Math.hypot(x + 0.5 - player.x, y + 0.5 - player.y) > view.reach;
-  if (pointer.place) {
-    target = { x, y, progress: 0, state: far ? 'far' : id === 0 ? 'place' : 'blocked' };
-    const key = `${x},${y}`;
-    if (!far && id === 0 && key !== lastPlaced) {
-      lastPlaced = key;
-      void game.place(x, y);
-    }
-    return;
-  }
-  const def = game.blockDefs.get(id);
-  if (id === 0 || !def) {
-    target = null;
-    progress = 0;
-    return;
-  }
-  const state: Target['state'] = far ? 'far'
-    : game.toolTier < def.tier ? 'weak'
-    : def.hardness <= 0 ? 'blocked' : 'ok';
-  if (!target || target.x !== x || target.y !== y || state !== 'ok') progress = 0;
-  target = { x, y, progress, state };
-  if (state !== 'ok' || mining) return;
-  progress += (dt * 1000) / (def.hardness / game.toolSpeed);
-  target.progress = Math.min(1, progress);
-  if (progress >= 1) {
-    mining = true;
-    progress = 0;
-    void game.mine(x, y).finally(() => {
-      mining = false;
-    });
-  }
+function updateSpawns(now: number) {
+  if (now - spawnAt < 900 || mobs.length >= MAX_MOBS) return;
+  spawnAt = now;
+  const born = spawnOne(game.mobDefs, game.world!, player);
+  if (born) mobs.push(born);
 }
 
 function updateCamera() {
@@ -115,47 +99,41 @@ function loop(now: number) {
   }
   const dt = Math.min(0.05, (now - last) / 1000 || 0);
   last = now;
-  step(player, controls, view, dt);
-  updateTarget(dt);
+  if (game.dead) {
+    cooldown = 0;
+    controls.attack = false;
+  } else {
+    step(player, controls, view, dt);
+    trySwing(dt);
+    stepMobs(mobs, view, player, dt, events);
+    prune(mobs, player);
+    updateSpawns(now);
+  }
   updateCamera();
-  drawScene(el.getContext('2d')!, view, player, cam, tex, target, (id) => game.blockDefs.get(id)?.light ?? 0);
+  drawScene(el.getContext('2d')!, view, player, cam, tex, mobs, swingAnim,
+    (id) => game.blockDefs.get(id)?.light ?? 0);
   if (now - hudAt > 150) {
     hudAt = now;
     const gx = Math.max(0, Math.min(view.width - 1, Math.floor(player.x)));
-    hud.value = { x: gx, y: Math.floor(player.y), depth: Math.max(0, Math.floor(player.y) - view.surface[gx]) };
+    hud.value = { x: gx, y: Math.floor(player.y), hp, mobs: mobs.filter((m) => m.dying === 0).length };
   }
   if (now - syncAt > 700) {
     syncAt = now;
-    if (Math.hypot(player.x - sent.x, player.y - sent.y) > 0.05) {
-      sent = { x: player.x, y: player.y };
-      game.syncPosition(player.x, player.y);
+    if (Math.hypot(player.x - sent.x, player.y - sent.y) > 0.05 || sent.hp !== hp) {
+      sent = { x: player.x, y: player.y, hp };
+      game.syncPlayer(player.x, player.y, hp);
     }
   }
 }
 
 function onPointerDown(e: PointerEvent) {
-  // 捕获只是增强：合成指针事件（自动化测试）没有活动指针，这里会抛 NotFoundError，不该挡住挖掘。
+  // 捕获只是增强：合成指针事件（自动化测试）没有活动指针，这里会抛 NotFoundError，不该挡住挥砍。
   try {
     canvasEl.value?.setPointerCapture(e.pointerId);
   } catch {
-    // 忽略：没有捕获也照样能挖，只是指针移出画布后不再跟踪。
+    // 忽略：没有捕获也照样能砍。
   }
-  pointer.down = true;
-  pointer.place = e.button === 2 || game.mode === 'place';
-  pointer.cx = e.clientX;
-  pointer.cy = e.clientY;
-  lastPlaced = '';
-}
-
-function onPointerMove(e: PointerEvent) {
-  pointer.cx = e.clientX;
-  pointer.cy = e.clientY;
-}
-
-function onPointerUp() {
-  pointer.down = false;
-  target = null;
-  progress = 0;
+  controls.attack = true;
 }
 
 function onKey(e: KeyboardEvent, down: boolean) {
@@ -164,19 +142,16 @@ function onKey(e: KeyboardEvent, down: boolean) {
   if (k === 'arrowleft' || k === 'a') controls.left = down;
   else if (k === 'arrowright' || k === 'd') controls.right = down;
   else if (k === 'arrowup' || k === 'w' || k === ' ') controls.jump = down;
+  else if (k === 'j' || k === 'k') controls.attack = down;
   else if (down && k === 'e') {
     game.craftOpen = !game.craftOpen;
-    if (game.craftOpen) game.postOpen = false;
+    if (game.craftOpen) game.bountyOpen = false;
   } else if (down && k === 'f') {
-    game.postOpen = !game.postOpen;
-    if (game.postOpen) game.craftOpen = false;
-  } else if (down && k === 'q') game.mode = game.mode === 'mine' ? 'place' : 'mine';
-  else if (down && k === 'escape') {
+    game.bountyOpen = !game.bountyOpen;
+    if (game.bountyOpen) game.craftOpen = false;
+  } else if (down && k === 'escape') {
     game.craftOpen = false;
-    game.postOpen = false;
-  } else if (down && k >= '1' && k <= '9') {
-    const item = game.hotbar[Number(k) - 1];
-    if (item) game.selected = item.key;
+    game.bountyOpen = false;
   } else return;
   e.preventDefault();
 }
@@ -184,30 +159,41 @@ function onKey(e: KeyboardEvent, down: boolean) {
 const keyDown = (e: KeyboardEvent) => onKey(e, true);
 const keyUp = (e: KeyboardEvent) => onKey(e, false);
 
+function spawnPoint() {
+  const view = game.world!;
+  const x = Math.floor(view.width / 2);
+  return { x: x + 0.5, y: view.surface[x] - 0.9 };
+}
+
+function respawn() {
+  const point = spawnPoint();
+  player = createPlayer(point.x, point.y);
+  hp = 100;
+  mobs = [];
+  sent = { ...point, hp: 100 };
+  game.respawn();
+  game.syncPlayer(point.x, point.y, 100);
+}
+
 function reset() {
   const view = game.world;
   if (!view || !game.content) return;
   player = createPlayer(view.player.x, view.player.y);
-  sent = { x: player.x, y: player.y };
+  hp = view.hp;
+  mobs = [];
+  cooldown = 0;
+  swingAnim = null;
+  sent = { x: player.x, y: player.y, hp };
   tex = buildTextures(game.content);
-  target = null;
-  progress = 0;
   resize();
 }
 
 let observer: ResizeObserver | null = null;
 
 watch(() => game.world?.id, reset, { immediate: true });
-
-// 塌方埋人时服务端把玩家顶到堆顶，这里照抄坐标，避免客户端物理和存档各说各话。
-watch(() => game.teleport?.n, () => {
-  const t = game.teleport;
-  if (!t) return;
-  player.x = t.x;
-  player.y = t.y;
-  player.vx = 0;
-  player.vy = 0;
-  sent = { x: t.x, y: t.y };
+// 读档回来时血量可能被服务端夹过（比如旧存档 null 按满血），这里跟一次。
+watch(() => game.hp, (value) => {
+  if (!game.dead) hp = value;
 });
 
 onMounted(() => {
@@ -228,28 +214,26 @@ onBeforeUnmount(() => {
   window.removeEventListener('keyup', keyUp);
   window.removeEventListener('blur', releaseAll);
   releaseAll();
-  game.syncPosition(player.x, player.y);
+  game.syncPlayer(player.x, player.y, hp);
 });
 </script>
 
 <template>
   <div class="stage">
-    <canvas
-      ref="canvasEl"
-      class="stage-canvas"
-      @pointerdown="onPointerDown"
-      @pointermove="onPointerMove"
-      @pointerup="onPointerUp"
-      @pointercancel="onPointerUp"
-      @contextmenu.prevent
-    />
+    <canvas ref="canvasEl" class="stage-canvas" @pointerdown="onPointerDown" @contextmenu.prevent />
     <div class="stage-hud">
-      <span>深度 {{ hud.depth }}</span>
+      <span class="stage-hp">
+        <i :style="{ width: `${Math.max(0, Math.min(100, hud.hp))}%` }" />
+        <b>{{ Math.round(hud.hp) }} / 100</b>
+      </span>
       <span>x{{ hud.x }} · y{{ hud.y }}</span>
-      <span class="stage-mode">{{ game.mode === 'mine' ? '挖掘模式' : '放置模式' }}</span>
+      <span>附近怪物 {{ hud.mobs }}</span>
     </div>
-    <div class="stage-tip">
-      {{ game.mode === 'mine' ? '按住方块挖 · 右键或 Q 切到放置' : '点空气格放下选中的方块 · Q 切回挖掘' }}
+    <div class="stage-tip">点画面或按 J 挥砍 · A/D 移动 · W 跳 · E 锻造 · F 悬赏板</div>
+    <div v-if="game.dead" class="dead">
+      <p class="dead-title">你被怪物打倒了</p>
+      <p class="dead-note">材料和悬赏进度都还在存档里，只丢这一条命。</p>
+      <button class="btn btn-primary btn-big" @click="respawn">在出生点重生</button>
     </div>
   </div>
 </template>

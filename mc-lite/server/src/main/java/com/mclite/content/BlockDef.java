@@ -1,15 +1,8 @@
 package com.mclite.content;
 
-public record BlockDef(int id, String key, String name, int hardness, int tier, String drop,
-                       String color, String accent, Boolean top, Boolean vertical, Boolean ore,
-                       Boolean falls, Integer light) {
-  public boolean breakable() {
-    return hardness > 0;
-  }
-
-  public boolean loose() {
-    return Boolean.TRUE.equals(falls);
-  }
+// 方块只是静态舞台与光源：世界不可挖掘，所以没有 hardness/tier/drop。
+public record BlockDef(int id, String key, String name, String color, String accent,
+                       Boolean top, Boolean vertical, Boolean ore, Integer light) {
 
   public int glow() {
     return light == null ? 0 : light;

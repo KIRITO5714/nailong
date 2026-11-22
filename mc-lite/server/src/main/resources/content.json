@@ -1,74 +1,81 @@
 {
-  "$comment": "内容与规则表：改方块/物品/工具/配方只动这个文件，Java 代码不需要改。hardness 是徒手基准毫秒，tier 是所需工具等级，drop 是挖掉后进背包的物品 key（null 表示不掉东西）。",
+  "$comment": "内容与规则表：改怪物/武器/配方/悬赏只动这个文件，Java 代码不需要改。世界不可挖掘，blocks 只是静态舞台与光源；材料全部来自打怪掉落。passable 的方块（树干、树叶）不挡人也不挡怪，否则不能挖的树会把长地图永久截断。",
   "blocks": [
-    { "id": 1, "key": "grass", "name": "草方块", "hardness": 350, "tier": 0, "drop": "dirt", "color": "#8b5a2b", "accent": "#6abe30", "top": true },
-    { "id": 2, "key": "dirt", "name": "泥土", "hardness": 300, "tier": 0, "drop": "dirt", "color": "#8b5a2b", "accent": "#6f4520" },
-    { "id": 3, "key": "stone", "name": "石头", "hardness": 900, "tier": 1, "drop": "stone", "color": "#8d8d94", "accent": "#6f6f78" },
-    { "id": 4, "key": "log", "name": "木头", "hardness": 600, "tier": 0, "drop": "log", "color": "#6b4a2a", "accent": "#8a6238", "vertical": true },
-    { "id": 5, "key": "leaves", "name": "树叶", "hardness": 150, "tier": 0, "drop": null, "color": "#3f8f3a", "accent": "#57b04a" },
-    { "id": 6, "key": "coal_ore", "name": "煤矿", "hardness": 1100, "tier": 1, "drop": "coal", "color": "#8d8d94", "accent": "#2b2b30", "ore": true },
-    { "id": 7, "key": "iron_ore", "name": "铁矿", "hardness": 1500, "tier": 2, "drop": "iron", "color": "#8d8d94", "accent": "#d8a878", "ore": true },
-    { "id": 8, "key": "gold_ore", "name": "金矿", "hardness": 1700, "tier": 3, "drop": "gold", "color": "#8d8d94", "accent": "#f2d24b", "ore": true },
-    { "id": 9, "key": "diamond_ore", "name": "钻石矿", "hardness": 2200, "tier": 3, "drop": "diamond", "color": "#8d8d94", "accent": "#5fe3e0", "ore": true },
-    { "id": 10, "key": "bedrock", "name": "基岩", "hardness": -1, "tier": 99, "drop": null, "color": "#3a3a42", "accent": "#23232a" },
-    { "id": 11, "key": "planks", "name": "木板", "hardness": 500, "tier": 0, "drop": "planks", "color": "#b8873f", "accent": "#96692c", "vertical": false },
-    { "id": 12, "key": "workbench", "name": "工作台", "hardness": 600, "tier": 0, "drop": "workbench", "color": "#b8873f", "accent": "#6b4a2a", "top": true },
-    { "id": 13, "key": "sand", "name": "沙块", "hardness": 250, "tier": 0, "drop": "sand", "color": "#d8c078", "accent": "#b89850", "falls": true },
-    { "id": 14, "key": "gravel", "name": "碎石", "hardness": 400, "tier": 0, "drop": "gravel", "color": "#7a7268", "accent": "#5c564e", "falls": true },
-    { "id": 15, "key": "glow_crystal", "name": "荧光晶", "hardness": 300, "tier": 0, "drop": "glow_crystal", "color": "#2b3a55", "accent": "#7ef0ff", "light": 6 }
+    { "id": 1, "key": "grass", "name": "草方块", "color": "#8b5a2b", "accent": "#6abe30", "top": true },
+    { "id": 2, "key": "dirt", "name": "泥土", "color": "#8b5a2b", "accent": "#6f4520" },
+    { "id": 3, "key": "stone", "name": "石头", "color": "#8d8d94", "accent": "#6f6f78" },
+    { "id": 4, "key": "log", "name": "木头", "color": "#6b4a2a", "accent": "#8a6238", "vertical": true, "passable": true },
+    { "id": 5, "key": "leaves", "name": "树叶", "color": "#3f8f3a", "accent": "#57b04a", "passable": true },
+    { "id": 6, "key": "coal_ore", "name": "煤矿", "color": "#8d8d94", "accent": "#2b2b30", "ore": true },
+    { "id": 7, "key": "iron_ore", "name": "铁矿", "color": "#8d8d94", "accent": "#d8a878", "ore": true },
+    { "id": 8, "key": "gold_ore", "name": "金矿", "color": "#8d8d94", "accent": "#f2d24b", "ore": true },
+    { "id": 9, "key": "diamond_ore", "name": "钻石矿", "color": "#8d8d94", "accent": "#5fe3e0", "ore": true },
+    { "id": 10, "key": "bedrock", "name": "基岩", "color": "#3a3a42", "accent": "#23232a" },
+    { "id": 11, "key": "planks", "name": "木板", "color": "#b8873f", "accent": "#96692c" },
+    { "id": 12, "key": "workbench", "name": "工作台", "color": "#b8873f", "accent": "#6b4a2a", "top": true },
+    { "id": 13, "key": "sand", "name": "沙块", "color": "#d8c078", "accent": "#b89850" },
+    { "id": 14, "key": "gravel", "name": "碎石", "color": "#7a7268", "accent": "#5c564e" },
+    { "id": 15, "key": "glow_crystal", "name": "荧光晶", "color": "#2b3a55", "accent": "#7ef0ff", "light": 6, "passable": true }
   ],
   "items": {
-    "dirt": { "name": "泥土", "color": "#8b5a2b", "accent": "#6f4520", "place": 2 },
-    "stone": { "name": "石头", "color": "#8d8d94", "accent": "#6f6f78", "place": 3 },
-    "log": { "name": "木头", "color": "#6b4a2a", "accent": "#8a6238", "place": 4 },
-    "planks": { "name": "木板", "color": "#b8873f", "accent": "#96692c", "place": 11 },
-    "workbench": { "name": "工作台", "color": "#b8873f", "accent": "#6b4a2a", "place": 12 },
-    "sand": { "name": "沙块", "color": "#d8c078", "accent": "#b89850", "place": 13 },
-    "gravel": { "name": "碎石", "color": "#7a7268", "accent": "#5c564e", "place": 14 },
-    "glow_crystal": { "name": "荧光晶", "color": "#2b3a55", "accent": "#7ef0ff", "place": 15 },
-    "coal": { "name": "煤炭", "color": "#2b2b30", "accent": "#4a4a52" },
-    "iron": { "name": "铁锭", "color": "#d8a878", "accent": "#f0c8a0" },
-    "gold": { "name": "金锭", "color": "#f2d24b", "accent": "#fff0a0" },
-    "diamond": { "name": "钻石", "color": "#5fe3e0", "accent": "#b8fffd" },
-    "wood_pickaxe": { "name": "木镐", "color": "#b8873f", "accent": "#6b4a2a", "tool": 1 },
-    "stone_pickaxe": { "name": "石镐", "color": "#8d8d94", "accent": "#6b4a2a", "tool": 2 },
-    "iron_pickaxe": { "name": "铁镐", "color": "#d8a878", "accent": "#6b4a2a", "tool": 3 },
-    "diamond_pickaxe": { "name": "钻石镐", "color": "#5fe3e0", "accent": "#6b4a2a", "tool": 4 }
+    "gel": { "name": "黏液", "color": "#7ec850", "accent": "#a8e878" },
+    "hide": { "name": "兽皮", "color": "#a06a3a", "accent": "#c08a52" },
+    "bone": { "name": "骨棒", "color": "#e8e4d8", "accent": "#c8c2b0" },
+    "wing": { "name": "翼膜", "color": "#9ad0e8", "accent": "#c8ecf8" },
+    "core": { "name": "晶核", "color": "#7ef0ff", "accent": "#c8fbff" },
+    "wood_sword": { "name": "木剑", "color": "#b8873f", "accent": "#6b4a2a", "weapon": 1 },
+    "stone_sword": { "name": "石剑", "color": "#8d8d94", "accent": "#6b4a2a", "weapon": 2 },
+    "iron_sword": { "name": "铁剑", "color": "#d8a878", "accent": "#6b4a2a", "weapon": 3 },
+    "diamond_sword": { "name": "钻石剑", "color": "#5fe3e0", "accent": "#6b4a2a", "weapon": 4 }
   },
-  "tools": [
-    { "tier": 0, "key": "hand", "name": "徒手", "speed": 1.0 },
-    { "tier": 1, "key": "wood_pickaxe", "name": "木镐", "speed": 1.6 },
-    { "tier": 2, "key": "stone_pickaxe", "name": "石镐", "speed": 2.4 },
-    { "tier": 3, "key": "iron_pickaxe", "name": "铁镐", "speed": 3.4 },
-    { "tier": 4, "key": "diamond_pickaxe", "name": "钻石镐", "speed": 4.8 }
+  "weapons": [
+    { "tier": 0, "key": "fist", "name": "徒手", "damage": 2, "range": 1.6, "cooldown": 0.55 },
+    { "tier": 1, "key": "wood_sword", "name": "木剑", "damage": 5, "range": 2.2, "cooldown": 0.45 },
+    { "tier": 2, "key": "stone_sword", "name": "石剑", "damage": 9, "range": 2.3, "cooldown": 0.40 },
+    { "tier": 3, "key": "iron_sword", "name": "铁剑", "damage": 14, "range": 2.4, "cooldown": 0.36 },
+    { "tier": 4, "key": "diamond_sword", "name": "钻石剑", "damage": 22, "range": 2.6, "cooldown": 0.32 }
   ],
   "recipes": [
-    { "id": "planks", "name": "木板 ×4", "in": { "log": 1 }, "out": { "planks": 4 }, "needsWorkbench": false },
-    { "id": "workbench", "name": "工作台", "in": { "planks": 4 }, "out": { "workbench": 1 }, "needsWorkbench": false },
-    { "id": "wood_pickaxe", "name": "木镐", "in": { "planks": 3 }, "out": { "wood_pickaxe": 1 }, "needsWorkbench": true },
-    { "id": "stone_pickaxe", "name": "石镐", "in": { "stone": 3, "planks": 2 }, "out": { "stone_pickaxe": 1 }, "needsWorkbench": true },
-    { "id": "iron_pickaxe", "name": "铁镐", "in": { "iron": 3, "planks": 2 }, "out": { "iron_pickaxe": 1 }, "needsWorkbench": true },
-    { "id": "diamond_pickaxe", "name": "钻石镐", "in": { "diamond": 3, "planks": 2 }, "out": { "diamond_pickaxe": 1 }, "needsWorkbench": true }
+    { "id": "wood_sword", "name": "木剑", "in": { "bone": 2, "gel": 2 }, "out": { "wood_sword": 1 } },
+    { "id": "stone_sword", "name": "石剑", "in": { "bone": 4, "hide": 3 }, "out": { "stone_sword": 1 } },
+    { "id": "iron_sword", "name": "铁剑", "in": { "core": 2, "hide": 4 }, "out": { "iron_sword": 1 } },
+    { "id": "diamond_sword", "name": "钻石剑", "in": { "core": 5, "wing": 4 }, "out": { "diamond_sword": 1 } }
   ],
-  "orders": {
-    "$comment": "地下邮局的委托池：slots 是同时挂出的单数，templates 随机抽（种子+单号决定，可复现）。minutes 是限时，reward 里的荧光晶是邮局独占奖励。",
+  "mobs": [
+    { "key": "slime", "name": "史莱姆", "hp": 12, "damage": 3, "speed": 1.6, "flying": false, "aggro": 7,
+      "w": 0.9, "h": 0.7, "weight": 30, "color": "#5aa832", "accent": "#a8e878",
+      "drops": [ { "item": "gel", "min": 1, "max": 2, "chance": 1.0 } ] },
+    { "key": "zombie", "name": "僵尸", "hp": 22, "damage": 5, "speed": 2.2, "flying": false, "aggro": 9,
+      "w": 0.7, "h": 1.7, "weight": 22, "color": "#4a7a4a", "accent": "#8fbf7a",
+      "drops": [ { "item": "hide", "min": 1, "max": 1, "chance": 1.0 }, { "item": "bone", "min": 1, "max": 1, "chance": 0.35 } ] },
+    { "key": "skeleton", "name": "骷髅", "hp": 18, "damage": 6, "speed": 2.4, "flying": false, "aggro": 10,
+      "w": 0.7, "h": 1.7, "weight": 20, "color": "#d8d4c4", "accent": "#9a968a",
+      "drops": [ { "item": "bone", "min": 1, "max": 2, "chance": 1.0 } ] },
+    { "key": "bat", "name": "蝙蝠", "hp": 10, "damage": 3, "speed": 3.2, "flying": true, "aggro": 11,
+      "w": 0.8, "h": 0.5, "weight": 18, "color": "#5a4468", "accent": "#a888c0",
+      "drops": [ { "item": "wing", "min": 1, "max": 1, "chance": 1.0 } ] },
+    { "key": "golem", "name": "岩魔", "hp": 46, "damage": 9, "speed": 1.4, "flying": false, "aggro": 8,
+      "w": 1.3, "h": 1.9, "weight": 10, "color": "#6a6470", "accent": "#7ef0ff",
+      "drops": [ { "item": "core", "min": 1, "max": 1, "chance": 1.0 }, { "item": "hide", "min": 1, "max": 2, "chance": 0.6 } ] }
+  ],
+  "bounties": {
+    "$comment": "悬赏板的单子池：slots 是同时挂出的单数，templates 随机抽（种子+单号决定，可复现）。wants 的键是怪物 key，交付时从击杀计数里扣。",
     "slots": 3,
     "templates": [
-      { "title": "洞口加固", "wants": { "dirt": 12 }, "reward": { "glow_crystal": 1 }, "minutes": 6 },
-      { "title": "铺路碎石", "wants": { "gravel": 8 }, "reward": { "glow_crystal": 1, "coal": 2 }, "minutes": 7 },
-      { "title": "木工备料", "wants": { "log": 6 }, "reward": { "planks": 6, "glow_crystal": 1 }, "minutes": 6 },
-      { "title": "矿灯燃料", "wants": { "coal": 4 }, "reward": { "iron": 2, "glow_crystal": 2 }, "minutes": 9 },
-      { "title": "铁轨计划", "wants": { "iron": 2 }, "reward": { "diamond": 1, "glow_crystal": 2 }, "minutes": 12 },
-      { "title": "沙袋防汛", "wants": { "sand": 10 }, "reward": { "stone": 6, "glow_crystal": 2 }, "minutes": 8 },
-      { "title": "木板桥面", "wants": { "planks": 10 }, "reward": { "iron": 2, "glow_crystal": 2 }, "minutes": 10 }
+      { "title": "史莱姆清剿", "wants": { "slime": 6 }, "reward": { "core": 1 }, "minutes": 6 },
+      { "title": "僵尸猎杀", "wants": { "zombie": 5 }, "reward": { "core": 1, "hide": 3 }, "minutes": 7 },
+      { "title": "骷髅清理", "wants": { "skeleton": 4 }, "reward": { "core": 2 }, "minutes": 7 },
+      { "title": "蝙蝠夜猎", "wants": { "bat": 4 }, "reward": { "wing": 3, "core": 1 }, "minutes": 8 },
+      { "title": "岩魔讨伐", "wants": { "golem": 2 }, "reward": { "core": 3, "wing": 2 }, "minutes": 10 },
+      { "title": "混合巡逻", "wants": { "slime": 4, "zombie": 4 }, "reward": { "core": 2, "wing": 2 }, "minutes": 9 }
     ]
   },
   "$simplifications": [
-    "矿石直接掉锭，不做熔炉与燃料——简易版省掉冶炼这一层。",
-    "镐只用木板/矿石合成，不做木棍。",
-    "工具等级自动取背包里最高级的镐，不需要手动装备。",
-    "树叶挖掉不掉东西，也不掉树苗。",
-    "塌方只作用于沙/碎石这类松散方块；泥土石头有黏聚力，挖空下方也不会坠。",
-    "委托订单惰性结算：不开后台线程，每次读档/请求时清理过期单并补新单。"
+    "世界不可挖掘：地形是静态舞台，矿石与荧光晶只作风景和光源，没有采集线。",
+    "怪物模拟与命中判定在客户端（与物理同层），服务端只结算掉落表、击杀计数、合成与悬赏。",
+    "武器等级自动取背包里最高级的剑，不需要手动装备，也没有耐久。",
+    "只有近战挥砍一条操作线，没有远程武器、技能树或 buff。",
+    "悬赏惰性结算：不开后台线程，每次读档/请求时清理过期单并补新单。",
+    "怪物死亡不掉落实体物品在地上，直接进背包，省掉拾取物理。"
   ]
 }

@@ -48,17 +48,13 @@ public class GameController {
   @DeleteMapping("/worlds/{id}")
   public Dtos.Ack delete(@PathVariable String id) {
     game.delete(id);
-    return new Dtos.Ack(true, null);
+    return new Dtos.Ack(true, null, null);
   }
 
-  @PostMapping("/worlds/{id}/mine")
-  public Dtos.Mutation mine(@PathVariable String id, @Valid @RequestBody Dtos.Mine request) {
-    return game.mine(id, request.x(), request.y());
-  }
-
-  @PostMapping("/worlds/{id}/place")
-  public Dtos.Mutation place(@PathVariable String id, @Valid @RequestBody Dtos.Place request) {
-    return game.place(id, request.x(), request.y(), request.item());
+  // 客户端判定挥砍命中后上报被杀的怪，服务端结算掉落与击杀数。
+  @PostMapping("/worlds/{id}/loot")
+  public Dtos.Mutation loot(@PathVariable String id, @Valid @RequestBody Dtos.Loot request) {
+    return game.loot(id, request.mob());
   }
 
   @PostMapping("/worlds/{id}/craft")
@@ -66,18 +62,18 @@ public class GameController {
     return game.craft(id, request.recipeId());
   }
 
-  @GetMapping("/worlds/{id}/orders")
-  public Dtos.OrdersView orders(@PathVariable String id) {
-    return game.orders(id);
+  @GetMapping("/worlds/{id}/bounties")
+  public Dtos.BountiesView bounties(@PathVariable String id) {
+    return game.bounties(id);
   }
 
   @PostMapping("/worlds/{id}/deliver")
   public Dtos.Mutation deliver(@PathVariable String id, @Valid @RequestBody Dtos.Deliver request) {
-    return game.deliver(id, request.orderId());
+    return game.deliver(id, request.bountyId());
   }
 
   @PostMapping("/worlds/{id}/move")
   public Dtos.Ack move(@PathVariable String id, @RequestBody Dtos.Move request) {
-    return game.move(id, request.x(), request.y());
+    return game.move(id, request.x(), request.y(), request.hp());
   }
 }

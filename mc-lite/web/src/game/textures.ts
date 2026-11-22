@@ -1,4 +1,4 @@
-import type { BlockDef, Content } from '../types';
+import type { BlockDef, Content, MobDef } from '../types';
 
 // 全部贴图都是代码画出来的 16×16 像素图，不依赖任何外部美术资源。
 const PX = 16;
@@ -21,6 +21,16 @@ function canvas() {
   const c = document.createElement('canvas');
   c.width = PX;
   c.height = PX;
+  return c;
+}
+
+function frame(c: HTMLCanvasElement, g: CanvasRenderingContext2D) {
+  g.fillStyle = 'rgba(255,255,255,0.10)';
+  g.fillRect(0, 0, PX, 1);
+  g.fillRect(0, 0, 1, PX);
+  g.fillStyle = 'rgba(0,0,0,0.24)';
+  g.fillRect(0, PX - 1, PX, 1);
+  g.fillRect(PX - 1, 0, 1, PX);
   return c;
 }
 
@@ -121,66 +131,133 @@ function paintBlock(def: BlockDef) {
     g.fillStyle = 'rgba(126,240,255,0.35)';
     g.fillRect(0, 12, PX, 2);
   }
-  g.fillStyle = 'rgba(255,255,255,0.10)';
-  g.fillRect(0, 0, PX, 1);
-  g.fillRect(0, 0, 1, PX);
-  g.fillStyle = 'rgba(0,0,0,0.24)';
-  g.fillRect(0, PX - 1, PX, 1);
-  g.fillRect(PX - 1, 0, 1, PX);
+  return frame(c, g);
+}
+
+function paintSword(g: CanvasRenderingContext2D, color: string, accent: string) {
+  g.fillStyle = '#6b4a2a';
+  for (let i = 0; i < 5; i++) g.fillRect(2 + i, 13 - i, 2, 2);
+  g.fillStyle = accent;
+  g.fillRect(5, 9, 5, 2);
+  g.fillRect(6, 8, 2, 4);
+  g.fillStyle = color;
+  for (let i = 0; i < 7; i++) g.fillRect(7 + i, 8 - i, 2, 2);
+  g.fillStyle = shade(color, 50);
+  for (let i = 0; i < 6; i++) g.fillRect(8 + i, 8 - i, 1, 1);
+}
+
+function paintMaterial(g: CanvasRenderingContext2D, key: string, color: string, accent: string) {
+  const rnd = rng(key.length * 104729 + 7);
+  g.fillStyle = color;
+  if (key === 'gel') {
+    g.fillRect(4, 7, 8, 6);
+    g.fillRect(3, 9, 10, 3);
+    g.fillStyle = accent;
+    g.fillRect(5, 8, 3, 2);
+    return;
+  }
+  if (key === 'hide') {
+    g.fillRect(3, 4, 10, 9);
+    g.fillRect(4, 3, 8, 11);
+    g.fillStyle = shade(color, -40);
+    for (let i = 0; i < 8; i++) g.fillRect(4 + Math.floor(rnd() * 8), 4 + Math.floor(rnd() * 8), 1, 1);
+    g.fillStyle = accent;
+    g.fillRect(4, 5, 8, 1);
+    return;
+  }
+  if (key === 'bone') {
+    g.fillRect(4, 6, 8, 3);
+    g.fillRect(3, 5, 3, 5);
+    g.fillRect(10, 5, 3, 5);
+    g.fillStyle = accent;
+    g.fillRect(4, 9, 8, 1);
+    return;
+  }
+  if (key === 'wing') {
+    g.fillRect(4, 6, 8, 2);
+    g.fillRect(5, 8, 7, 2);
+    g.fillRect(7, 10, 5, 2);
+    g.fillStyle = accent;
+    g.fillRect(4, 5, 8, 1);
+    g.fillRect(6, 7, 5, 1);
+    return;
+  }
+  // 晶核：一颗发亮的菱形
+  g.fillRect(6, 3, 4, 2);
+  g.fillRect(4, 5, 8, 6);
+  g.fillRect(6, 11, 4, 2);
+  g.fillStyle = accent;
+  g.fillRect(6, 5, 3, 3);
+  g.fillRect(7, 8, 2, 2);
+}
+
+function paintItem(key: string, color: string, accent: string, weapon?: number) {
+  const c = canvas();
+  const g = c.getContext('2d')!;
+  if (weapon !== undefined) paintSword(g, color, accent);
+  else paintMaterial(g, key, color, accent);
   return c;
 }
 
-function paintItem(key: string, color: string, accent: string) {
+function paintMob(def: MobDef) {
   const c = canvas();
   const g = c.getContext('2d')!;
-  const rnd = rng(key.length * 104729 + 7);
-  if (key.endsWith('_pickaxe')) {
-    g.fillStyle = '#6b4a2a';
-    for (let i = 0; i < 9; i++) g.fillRect(3 + i, 13 - i, 2, 2);
-    g.fillStyle = color;
-    g.fillRect(7, 2, 7, 2);
-    g.fillRect(6, 3, 3, 2);
-    g.fillRect(12, 3, 3, 2);
-    g.fillRect(5, 4, 2, 2);
-    g.fillRect(14, 4, 1, 2);
-    g.fillStyle = accent;
-    g.fillRect(8, 2, 5, 1);
+  const rnd = rng(def.key.length * 31337 + def.hp);
+  const body = def.color;
+  const light = def.accent;
+  if (def.key === 'slime') {
+    g.fillStyle = body;
+    g.fillRect(2, 6, 12, 8);
+    g.fillRect(3, 4, 10, 10);
+    g.fillStyle = light;
+    g.fillRect(4, 5, 4, 2);
+    g.fillStyle = '#20242e';
+    g.fillRect(5, 9, 2, 2);
+    g.fillRect(9, 9, 2, 2);
     return c;
   }
-  if (key === 'diamond') {
-    g.fillStyle = color;
-    g.fillRect(5, 4, 6, 2);
-    g.fillRect(3, 6, 10, 3);
-    g.fillRect(5, 9, 6, 2);
-    g.fillRect(7, 11, 2, 1);
-    g.fillStyle = accent;
-    g.fillRect(5, 5, 2, 2);
-    g.fillRect(8, 6, 2, 1);
+  if (def.key === 'bat') {
+    g.fillStyle = body;
+    g.fillRect(6, 6, 4, 5);
+    g.fillRect(1, 4, 5, 4);
+    g.fillRect(10, 4, 5, 4);
+    g.fillStyle = light;
+    g.fillRect(2, 5, 3, 1);
+    g.fillRect(11, 5, 3, 1);
+    g.fillStyle = '#f0d060';
+    g.fillRect(7, 7, 1, 1);
+    g.fillRect(9, 7, 1, 1);
     return c;
   }
-  if (key === 'coal') {
-    g.fillStyle = color;
-    g.fillRect(4, 5, 8, 7);
-    g.fillRect(3, 7, 10, 4);
-    g.fillRect(6, 3, 5, 2);
-    g.fillStyle = accent;
+  if (def.key === 'golem') {
+    g.fillStyle = body;
+    g.fillRect(2, 4, 12, 10);
+    g.fillRect(4, 2, 8, 12);
+    for (let i = 0; i < 18; i++) {
+      g.fillStyle = rnd() < 0.5 ? shade(body, -26) : shade(body, 20);
+      g.fillRect(3 + Math.floor(rnd() * 10), 3 + Math.floor(rnd() * 10), 2, 2);
+    }
+    g.fillStyle = light;
     g.fillRect(5, 6, 2, 2);
-    g.fillRect(9, 9, 2, 1);
+    g.fillRect(9, 6, 2, 2);
+    g.fillRect(6, 10, 4, 1);
     return c;
   }
-  // 锭：一条梯形金属块
-  g.fillStyle = color;
-  g.fillRect(3, 7, 10, 5);
-  g.fillRect(4, 6, 8, 1);
-  g.fillStyle = accent;
-  g.fillRect(4, 7, 8, 1);
-  g.fillRect(5, 8, 3, 1);
-  g.fillStyle = shade(color, -50);
-  g.fillRect(3, 11, 10, 1);
-  for (let i = 0; i < 4; i++) {
-    g.fillStyle = shade(color, rnd() < 0.5 ? -20 : 20);
-    g.fillRect(4 + Math.floor(rnd() * 8), 8 + Math.floor(rnd() * 3), 1, 1);
-  }
+  // 僵尸与骷髅共用直立人形，靠配色和细节区分。
+  const skeleton = def.key === 'skeleton';
+  g.fillStyle = body;
+  g.fillRect(5, 1, 6, 5);
+  g.fillRect(4, 6, 8, 6);
+  g.fillRect(5, 12, 2, 3);
+  g.fillRect(9, 12, 2, 3);
+  g.fillRect(2, 7, 2, 5);
+  g.fillRect(12, 7, 2, 5);
+  g.fillStyle = skeleton ? shade(body, -40) : light;
+  g.fillRect(skeleton ? 6 : 5, 7, skeleton ? 4 : 6, 1);
+  g.fillRect(7, 9, 2, 2);
+  g.fillStyle = skeleton ? '#2a2a30' : '#1c2a1c';
+  g.fillRect(6, 3, 1, 2);
+  g.fillRect(9, 3, 1, 2);
   return c;
 }
 
@@ -189,9 +266,11 @@ export function buildTextures(content: Content) {
   for (const def of content.blocks) blocks.set(def.id, paintBlock(def));
   const items = new Map<string, HTMLCanvasElement>();
   for (const [key, def] of Object.entries(content.items)) {
-    items.set(key, def.place !== undefined ? blocks.get(def.place)! : paintItem(key, def.color, def.accent));
+    items.set(key, paintItem(key, def.color, def.accent, def.weapon));
   }
-  return { blocks, items };
+  const mobs = new Map<string, HTMLCanvasElement>();
+  for (const def of content.mobs) mobs.set(def.key, paintMob(def));
+  return { blocks, items, mobs };
 }
 
 export type Textures = ReturnType<typeof buildTextures>;

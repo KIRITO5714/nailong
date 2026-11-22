@@ -4,7 +4,7 @@ import { useGame } from './stores/game';
 import GameCanvas from './components/GameCanvas.vue';
 import Hotbar from './components/Hotbar.vue';
 import CraftPanel from './components/CraftPanel.vue';
-import PostPanel from './components/PostPanel.vue';
+import BountyPanel from './components/BountyPanel.vue';
 import TouchControls from './components/TouchControls.vue';
 import WorldPicker from './components/WorldPicker.vue';
 
@@ -15,15 +15,15 @@ onMounted(() => game.boot());
 <template>
   <div class="app">
     <header class="topbar">
-      <div class="brand">方块世界<span>mc-lite</span></div>
+      <div class="brand">方块猎场<span>mc-lite</span></div>
       <template v-if="game.world">
-        <div class="world-name">{{ game.world.name }}</div>
-        <div class="tool-badge" :title="'工具等级 T' + game.toolTier">
-          {{ game.toolName }} · T{{ game.toolTier }}
+        <div class="world-name">{{ game.world.name }} · {{ game.world.width }} 格长</div>
+        <div class="weapon-badge" :title="'武器等级 T' + game.weaponTier">
+          {{ game.weaponName }} · T{{ game.weaponTier }}
         </div>
         <div class="topbar-actions">
-          <button class="btn btn-ghost" @click="game.postOpen = !game.postOpen; game.craftOpen = false">委托 (F)</button>
-          <button class="btn btn-ghost" @click="game.craftOpen = !game.craftOpen; game.postOpen = false">合成 (E)</button>
+          <button class="btn btn-ghost" @click="game.bountyOpen = !game.bountyOpen; game.craftOpen = false">悬赏 (F)</button>
+          <button class="btn btn-ghost" @click="game.craftOpen = !game.craftOpen; game.bountyOpen = false">锻造 (E)</button>
           <button class="btn btn-ghost" @click="game.leave()">换个世界</button>
         </div>
       </template>
@@ -38,7 +38,7 @@ onMounted(() => game.boot());
       <Hotbar />
       <TouchControls />
       <CraftPanel v-if="game.craftOpen" />
-      <PostPanel v-if="game.postOpen" />
+      <BountyPanel v-if="game.bountyOpen" />
     </main>
 
     <transition name="fade">

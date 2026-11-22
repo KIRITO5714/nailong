@@ -2,31 +2,52 @@ export interface BlockDef {
   id: number;
   key: string;
   name: string;
-  hardness: number;
-  tier: number;
-  drop: string | null;
   color: string;
   accent: string;
   top?: boolean;
   vertical?: boolean;
   ore?: boolean;
-  falls?: boolean;
   light?: number;
+  passable?: boolean;
 }
 
 export interface ItemDef {
   name: string;
   color: string;
   accent: string;
-  place?: number;
-  tool?: number;
+  weapon?: number;
 }
 
-export interface ToolDef {
+export interface WeaponDef {
   tier: number;
   key: string;
   name: string;
+  damage: number;
+  range: number;
+  cooldown: number;
+}
+
+export interface DropDef {
+  item: string;
+  min: number;
+  max: number;
+  chance: number;
+}
+
+export interface MobDef {
+  key: string;
+  name: string;
+  hp: number;
+  damage: number;
   speed: number;
+  flying: boolean;
+  aggro: number;
+  w: number;
+  h: number;
+  weight: number;
+  color: string;
+  accent: string;
+  drops: DropDef[];
 }
 
 export interface RecipeDef {
@@ -34,18 +55,26 @@ export interface RecipeDef {
   name: string;
   in: Record<string, number>;
   out: Record<string, number>;
-  needsWorkbench: boolean;
+}
+
+export interface BountyTemplate {
+  title: string;
+  wants: Record<string, number>;
+  reward: Record<string, number>;
+  minutes: number;
 }
 
 export interface Content {
   blocks: BlockDef[];
   items: Record<string, ItemDef>;
-  tools: ToolDef[];
+  weapons: WeaponDef[];
   recipes: RecipeDef[];
+  mobs: MobDef[];
+  bounties: { slots: number; templates: BountyTemplate[] };
   $simplifications?: string[];
 }
 
-export interface Order {
+export interface Bounty {
   id: string;
   title: string;
   wants: Record<string, number>;
@@ -53,8 +82,8 @@ export interface Order {
   expiresAt: number;
 }
 
-export interface OrdersView {
-  orders: Order[];
+export interface BountiesView {
+  bounties: Bounty[];
   now: number;
 }
 
@@ -68,10 +97,11 @@ export interface WorldView {
   surface: number[];
   player: { x: number; y: number };
   inventory: Record<string, number>;
-  toolTier: number;
-  toolName: string;
-  reach: number;
-  orders: Order[];
+  kills: Record<string, number>;
+  hp: number;
+  weaponTier: number;
+  weaponName: string;
+  bounties: Bounty[];
   now: number;
 }
 
@@ -84,20 +114,18 @@ export interface WorldSummary {
   updatedAt: string;
 }
 
-export interface BlockChange {
-  x: number;
-  y: number;
-  id: number;
-}
-
 export interface Mutation {
   ok: boolean;
-  changes: BlockChange[];
   inventory: Record<string, number>;
-  toolTier: number;
-  toolName: string;
-  drop: string | null;
+  kills: Record<string, number>;
+  weaponTier: number;
+  weaponName: string;
   message: string;
+  bounties: Bounty[] | null;
+}
+
+export interface Ack {
+  ok: boolean;
   player: { x: number; y: number } | null;
-  orders: Order[] | null;
+  hp?: number;
 }

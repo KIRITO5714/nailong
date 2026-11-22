@@ -7,75 +7,61 @@ import type { RecipeDef } from '../types';
 const game = useGame();
 const icons = computed(() => (game.content ? itemIcons(game.content) : {}));
 
-const benchId = computed(() => game.content?.blocks.find((b) => b.key === 'workbench')?.id ?? 12);
-
-// 和后端同一套判定：以玩家为中心、reach 为半径扫一圈有没有工作台。
-const nearBench = computed(() => {
-  void game.revision;
-  const view = game.world;
-  if (!view) return false;
-  const r = Math.ceil(view.reach);
-  const px = Math.floor(game.playerPos.x);
-  const py = Math.floor(game.playerPos.y);
-  for (let y = py - r; y <= py + r; y++) {
-    for (let x = px - r; x <= px + r; x++) {
-      if (x < 0 || y < 0 || x >= view.width || y >= view.height) continue;
-      if (view.blocks[y * view.width + x] === benchId.value) return true;
-    }
-  }
-  return false;
-});
-
 function missing(recipe: RecipeDef) {
-  return Object.entries(recipe.in)
-    .filter(([key, need]) => (game.inventory[key] ?? 0) < need)
-    .map(([key, need]) => ({ key, need, have: game.inventory[key] ?? 0 }));
+  return Object.entries(recipe.in).filter(([key, need]) => (game.inventory[key] ?? 0) < need);
 }
 
-function blocked(recipe: RecipeDef) {
-  if (missing(recipe).length) return '材料不够';
-  if (recipe.needsWorkbench && !nearBench.value) return '要站在工作台旁边';
-  return '';
+function outKey(recipe: RecipeDef) {
+  return Object.keys(recipe.out)[0];
+}
+
+// 这把剑的属性直接从内容表读，面板不写死任何数值。
+function statsOf(recipe: RecipeDef) {
+  const tier = game.content?.items[outKey(recipe)]?.weapon ?? 0;
+  const weapon = game.content?.weapons.find((w) => w.tier === tier);
+  if (!weapon) return '';
+  return `伤害 ${weapon.damage} · 距离 ${weapon.range.toFixed(1)} · 冷却 ${weapon.cooldown.toFixed(2)}s`;
 }
 
 function nameOf(key: string) {
   return game.content?.items[key]?.name ?? key;
+}
+
+function owned(recipe: RecipeDef) {
+  return (game.inventory[outKey(recipe)] ?? 0) > 0;
 }
 </script>
 
 <template>
   <aside class="craft">
     <header class="craft-head">
-      <h2>合成</h2>
-      <span class="craft-bench" :class="{ on: nearBench }">{{ nearBench ? '工作台就在旁边' : '附近没有工作台' }}</span>
+      <h2>锻造</h2>
+      <span class="craft-bench on">现在用的是 {{ game.weaponName }}（T{{ game.weaponTier }}）</span>
       <button class="btn btn-ghost" @click="game.craftOpen = false">关闭 (E)</button>
     </header>
     <ul class="craft-list">
       <li v-for="recipe in game.content?.recipes ?? []" :key="recipe.id" class="craft-item">
-        <img class="craft-icon" :src="icons[Object.keys(recipe.out)[0]]" :alt="recipe.name" draggable="false" />
+        <img class="craft-icon" :src="icons[outKey(recipe)]" :alt="recipe.name" draggable="false" />
         <div class="craft-body">
           <div class="craft-name">
             {{ recipe.name }}
-            <em v-if="recipe.needsWorkbench">需要工作台</em>
+            <em v-if="owned(recipe)">已在背包</em>
           </div>
           <div class="craft-cost">
             <span v-for="(need, key) in recipe.in" :key="key" :class="{ short: (game.inventory[key] ?? 0) < need }">
               {{ nameOf(key) }} {{ game.inventory[key] ?? 0 }}/{{ need }}
             </span>
           </div>
-          <div class="craft-out">
-            产出：
-            <span v-for="(count, key) in recipe.out" :key="key">{{ nameOf(key) }} ×{{ count }}</span>
-          </div>
+          <div class="craft-out">{{ statsOf(recipe) }}</div>
         </div>
-        <button class="btn btn-primary" :disabled="!!blocked(recipe)" @click="game.craft(recipe.id)">
-          {{ blocked(recipe) || '合成' }}
+        <button class="btn btn-primary" :disabled="missing(recipe).length > 0" @click="game.craft(recipe.id)">
+          {{ missing(recipe).length ? '材料不够' : '打造' }}
         </button>
       </li>
     </ul>
     <p class="craft-note">
-      工具等级自动取背包里最高级的镐：徒手 → 木镐(T1) → 石镐(T2) → 铁镐(T3) → 钻石镐(T4)。
-      等级不够的矿挖不动，框会变红。
+      材料全部来自怪物掉落：史莱姆掉黏液、僵尸掉兽皮、骷髅掉骨棒、蝙蝠掉翼膜、岩魔掉晶核。
+      武器等级自动取背包里最好的一把剑，不用手动装备，也没有耐久。
     </p>
   </aside>
 </template>

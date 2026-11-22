@@ -7,7 +7,7 @@ public class WorldGenerator {
 
   private static final int GRASS = 1, DIRT = 2, STONE = 3, LOG = 4, LEAVES = 5;
   private static final int COAL = 6, IRON = 7, GOLD = 8, DIAMOND = 9, BEDROCK = 10;
-  private static final int SAND = 13, GRAVEL = 14;
+  private static final int SAND = 13, GRAVEL = 14, GLOW = 15;
 
   public World generate(long seed, int width, int height) {
     Random rnd = new Random(seed);
@@ -18,6 +18,7 @@ public class WorldGenerator {
     pockets(world, rnd, surface, width, height);
     trees(world, rnd, surface, width);
     clearSpawn(world, surface, width / 2);
+    crystals(world, rnd, surface, width);
     return world;
   }
 
@@ -32,6 +33,8 @@ public class WorldGenerator {
     for (int x = 0; x < width; x++) {
       double wave = Math.sin(x * 0.055 + p1) * 5 + Math.sin(x * 0.17 + p2) * 2.2 + Math.sin(x * 0.43 + p3) * 0.9;
       int top = clamp((int) Math.round(base + wave), 6, height - 24);
+      // 世界不能挖，地表就是唯一通路：相邻列最多差 1 格，跳跃高度刚好能一级级翻过去。
+      if (x > 0) top = clamp(top, surface[x - 1] - 1, surface[x - 1] + 1);
       surface[x] = top;
       for (int y = top; y < height; y++) {
         int id = y == top ? GRASS : y <= top + 4 ? DIRT : STONE;
@@ -112,6 +115,18 @@ public class WorldGenerator {
   private void clearSpawn(World world, int[] surface, int spawnX) {
     for (int x = spawnX - 1; x <= spawnX + 1; x++) {
       for (int y = 0; y < surface[x]; y++) world.set(x, y, 0);
+    }
+  }
+
+  // 世界不可挖掘，地下永远看不到，所以荧光晶只长在地表当风景灯，也给长地图分段做记号。
+  private void crystals(World world, Random rnd, int[] surface, int width) {
+    int spawnX = width / 2;
+    for (int x = 3; x < width - 3; x++) {
+      if (Math.abs(x - spawnX) < 5 || rnd.nextDouble() > 0.02) continue;
+      int ground = surface[x];
+      if (world.get(x, ground - 1) != 0) continue;
+      int height = 1 + rnd.nextInt(2);
+      for (int y = ground - height; y < ground; y++) world.set(x, y, GLOW);
     }
   }
 

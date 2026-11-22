@@ -24,9 +24,8 @@ spring:
 
 mclite:
   world:
-    width: 160
+    width: 480
     height: 96
-    reach: 5
 
 logging:
   level:

@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mclite.api.Dtos;
-import com.mclite.world.World;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,126 +27,168 @@ class GameServiceTest {
   @Autowired ObjectMapper mapper;
 
   private String id;
-  private int spawnX;
-  private int groundY;
 
   @BeforeEach
   void freshWorld() {
-    Dtos.WorldView view = game.create("测试世界", 42L);
-    id = view.id();
-    spawnX = view.width() / 2;
-    groundY = view.surface()[spawnX];
+    id = game.create("测试世界", 42L).id();
   }
 
   @Test
-  void handCanMineGrassAndGetsDirt() {
-    Dtos.Mutation result = game.mine(id, spawnX, groundY);
+  void newWorldSpansTheLongMapWithEmptyHands() {
+    Dtos.WorldView view = game.load(id);
+    assertThat(view.width()).isEqualTo(480);
+    assertThat(view.height()).isEqualTo(96);
+    assertThat(view.inventory()).isEmpty();
+    assertThat(view.kills()).isEmpty();
+    assertThat(view.hp()).isEqualTo(WorldViews.MAX_HP);
+    assertThat(view.weaponTier()).isZero();
+    assertThat(view.weaponName()).isEqualTo("徒手");
+    assertThat(view.player().x()).isEqualTo(view.width() / 2 + 0.5);
+  }
+
+  @Test
+  void killingSlimeDropsGelAndCountsTheKill() {
+    Dtos.Mutation result = kill("slime");
     assertThat(result.ok()).isTrue();
-    assertThat(result.changes()).containsExactly(new Dtos.BlockChange(spawnX, groundY, 0));
-    assertThat(result.inventory()).containsEntry("dirt", 1);
-    assertThat(result.toolTier()).isZero();
-    assertThat(game.load(id).blocks()[groundY * 160 + spawnX]).isZero();
+    assertThat(result.inventory().get("gel")).isBetween(1, 2);
+    assertThat(result.kills()).containsEntry("slime", 1);
+    assertThat(result.message()).contains("史莱姆");
+    Dtos.WorldView reloaded = game.load(id);
+    assertThat(reloaded.inventory()).containsEntry("gel", result.inventory().get("gel"));
+    assertThat(reloaded.kills()).containsEntry("slime", 1);
   }
 
   @Test
-  void handCannotMineStone() {
-    paint(spawnX + 1, groundY, 3);
-    assertCode(() -> game.mine(id, spawnX + 1, groundY), "TOOL_TOO_WEAK");
-    assertThat(game.load(id).blocks()[groundY * 160 + spawnX + 1]).isEqualTo(3);
+  void dropsFollowTheDropTable() {
+    for (int i = 0; i < 3; i++) kill("zombie");
+    Map<String, Integer> inventory = game.load(id).inventory();
+    // 兽皮 chance=1.0 必掉 1 个，骨棒 chance=0.35 只要求不越界。
+    assertThat(inventory).containsEntry("hide", 3);
+    assertThat(inventory.getOrDefault("bone", 0)).isBetween(0, 3);
+    assertThat(game.load(id).kills()).containsEntry("zombie", 3);
   }
 
   @Test
-  void leavesDropNothingAndBedrockIsUnbreakable() {
-    paint(spawnX + 1, groundY - 1, 5);
-    assertThat(game.mine(id, spawnX + 1, groundY - 1).inventory()).isEmpty();
-    assertCode(() -> game.mine(id, spawnX, 95), "UNBREAKABLE");
+  void unknownMobAndSpammingSwingsAreRejected() {
+    assertCode(() -> game.loot(id, "dragon"), "UNKNOWN_MOB");
+    game.loot(id, "slime");
+    assertCode(() -> game.loot(id, "slime"), "LOOT_TOO_FAST");
   }
 
   @Test
-  void outOfRangeAndAirAreRejected() {
-    assertCode(() -> game.mine(id, spawnX + 30, groundY), "OUT_OF_RANGE");
-    assertCode(() -> game.mine(id, spawnX, groundY - 3), "NOT_SOLID");
-    assertCode(() -> game.mine(id, 500, 5), "OUT_OF_BOUNDS");
-  }
-
-  @Test
-  void craftingWithoutWorkbenchIsRejected() {
-    give("planks", 3);
-    assertCode(() -> game.craft(id, "wood_pickaxe"), "NEEDS_WORKBENCH");
-    assertCode(() -> game.craft(id, "planks"), "NO_MATERIAL");
+  void craftingSwordsUpgradesTheWeapon() {
+    assertCode(() -> game.craft(id, "wood_sword"), "NO_MATERIAL");
     assertCode(() -> game.craft(id, "nope"), "UNKNOWN_RECIPE");
+    give("bone", 2);
+    give("gel", 2);
+    Dtos.Mutation wood = game.craft(id, "wood_sword");
+    assertThat(wood.weaponTier()).isEqualTo(1);
+    assertThat(wood.weaponName()).isEqualTo("木剑");
+    assertThat(wood.message()).contains("木剑");
+    assertThat(wood.inventory()).containsEntry("wood_sword", 1)
+        .doesNotContainKey("bone").doesNotContainKey("gel");
   }
 
   @Test
-  void planksAndWorkbenchCraftAnywhere() {
-    give("log", 2);
-    Dtos.Mutation planks = game.craft(id, "planks");
-    assertThat(planks.inventory()).containsEntry("planks", 4).containsEntry("log", 1);
-    assertThat(game.craft(id, "workbench").inventory()).containsEntry("workbench", 1).doesNotContainKey("planks");
+  void weaponTierFollowsTheBestSwordInBag() {
+    give("wood_sword", 1);
+    give("diamond_sword", 1);
+    Dtos.WorldView view = game.load(id);
+    assertThat(view.weaponTier()).isEqualTo(4);
+    assertThat(view.weaponName()).isEqualTo("钻石剑");
   }
 
   @Test
-  void fullToolProgressionUnlocksDeeperOres() {
-    give("log", 4);
-    game.craft(id, "planks");
-    game.craft(id, "planks");
-    game.craft(id, "workbench");
-    game.place(id, spawnX + 1, groundY - 1, "workbench");
-
-    Dtos.Mutation wood = game.craft(id, "wood_pickaxe");
-    assertThat(wood.toolTier()).isEqualTo(1);
-    assertThat(wood.toolName()).isEqualTo("木镐");
-    paint(spawnX + 2, groundY, 3);
-    assertThat(game.mine(id, spawnX + 2, groundY).inventory()).containsEntry("stone", 1);
-    assertCode(() -> mineOre(7), "TOOL_TOO_WEAK");
-
-    give("stone", 3);
-    give("planks", 2);
-    assertThat(game.craft(id, "stone_pickaxe").toolTier()).isEqualTo(2);
-    assertThat(mineOre(7).inventory()).containsEntry("iron", 1);
-    assertCode(() -> mineOre(9), "TOOL_TOO_WEAK");
-
-    give("iron", 3);
-    give("planks", 2);
-    assertThat(game.craft(id, "iron_pickaxe").toolTier()).isEqualTo(3);
-    assertThat(mineOre(8).inventory()).containsEntry("gold", 1);
-    assertThat(mineOre(9).inventory()).containsEntry("diamond", 1);
-
-    give("diamond", 3);
-    give("planks", 2);
-    assertThat(game.craft(id, "diamond_pickaxe").toolTier()).isEqualTo(4);
+  void bountyDeliveryConsumesKillsAndPaysReward() {
+    Dtos.Bounty first = game.load(id).bounties().get(0);
+    first.wants().forEach(this::giveKills);
+    Dtos.Mutation result = game.deliver(id, first.id());
+    assertThat(result.message()).contains(first.title());
+    assertThat(result.bounties()).hasSize(3);
+    assertThat(result.bounties()).extracting(Dtos.Bounty::id).doesNotContain(first.id());
+    first.reward().forEach((key, count) -> assertThat(result.inventory()).containsEntry(key, count));
+    first.wants().keySet().forEach(key -> assertThat(result.kills()).doesNotContainKey(key));
   }
 
   @Test
-  void placingRulesAreEnforced() {
-    assertCode(() -> game.place(id, spawnX + 1, groundY - 1, "dirt"), "NO_ITEM");
-    give("iron", 1);
-    assertCode(() -> game.place(id, spawnX + 1, groundY - 1, "iron"), "NOT_PLACEABLE");
-    give("dirt", 2);
-    assertCode(() -> game.place(id, spawnX, groundY, "dirt"), "NOT_EMPTY");
-    assertCode(() -> game.place(id, spawnX, groundY - 1, "dirt"), "BLOCKED_BY_PLAYER");
-    Dtos.Mutation placed = game.place(id, spawnX + 1, groundY - 1, "dirt");
-    assertThat(placed.inventory()).containsEntry("dirt", 1);
-    assertThat(placed.changes()).containsExactly(new Dtos.BlockChange(spawnX + 1, groundY - 1, 2));
+  void deliverWithoutKillsOrUnknownBountyIsRejected() {
+    Dtos.Bounty first = game.load(id).bounties().get(0);
+    assertCode(() -> game.deliver(id, first.id()), "NOT_ENOUGH_KILLS");
+    assertCode(() -> game.deliver(id, "nope"), "UNKNOWN_BOUNTY");
   }
 
   @Test
-  void moveIsClampedAndPersisted() {
-    Dtos.Ack ack = game.move(id, -50, 999);
+  void bountiesEndpointKeepsThreeFreshOffers() {
+    Dtos.BountiesView view = game.bounties(id);
+    assertThat(view.bounties()).hasSize(3);
+    assertThat(view.now()).isPositive();
+    assertThat(view.bounties()).allSatisfy(b -> assertThat(b.expiresAt()).isGreaterThan(view.now()));
+  }
+
+  @Test
+  void expiredBountiesAreReplacedOnLoad() throws Exception {
+    List<Dtos.Bounty> old = storedBounties();
+    rewriteBounties(old.stream()
+        .map(b -> new Dtos.Bounty(b.id(), b.title(), b.wants(), b.reward(), 1L)).toList());
+    Dtos.WorldView view = game.load(id);
+    assertThat(view.bounties()).hasSize(3);
+    List<String> ids = view.bounties().stream().map(Dtos.Bounty::id).toList();
+    assertThat(old.stream().map(Dtos.Bounty::id).noneMatch(ids::contains)).isTrue();
+  }
+
+  @Test
+  void deliveringAnExpiredBountyIsRejected() throws Exception {
+    List<Dtos.Bounty> old = storedBounties();
+    Dtos.Bounty stale = new Dtos.Bounty(old.get(0).id(), old.get(0).title(),
+        old.get(0).wants(), old.get(0).reward(), 1L);
+    List<Dtos.Bounty> mixed = new ArrayList<>(old);
+    mixed.set(0, stale);
+    rewriteBounties(mixed);
+    stale.wants().forEach(this::giveKills);
+    assertCode(() -> game.deliver(id, stale.id()), "BOUNTY_EXPIRED");
+  }
+
+  // 旧存档里是「送信委托」，标题已不在新内容表里，读档时必须整批换掉而不是崩掉。
+  @Test
+  void legacyBountyTitlesAreCleanedOnLoad() throws Exception {
+    List<Dtos.Bounty> legacy = List.of(
+        new Dtos.Bounty("b0", "送货：木板", Map.of("planks", 6), Map.of("core", 1), Long.MAX_VALUE),
+        new Dtos.Bounty("b1", "送货：荧光晶", Map.of("glow_crystal", 2), Map.of("core", 1), Long.MAX_VALUE));
+    rewriteBounties(legacy);
+    Dtos.WorldView view = game.load(id);
+    assertThat(view.bounties()).hasSize(3);
+    assertThat(view.bounties()).extracting(Dtos.Bounty::title).doesNotContain("送货：木板", "送货：荧光晶");
+  }
+
+  @Test
+  void bountyBoardNeverShowsDuplicateTitles() {
+    for (long seed : new long[] {1L, 42L, 7L, 99L, 2026L}) {
+      Dtos.WorldView view = game.create("悬赏测试", seed);
+      assertThat(view.bounties()).hasSize(3);
+      assertThat(view.bounties().stream().map(Dtos.Bounty::title).toList()).doesNotHaveDuplicates();
+      game.delete(view.id());
+    }
+  }
+
+  @Test
+  void moveIsClampedAndStoresHp() {
+    Dtos.Ack ack = game.move(id, -50, 999, 40);
     assertThat(ack.player().x()).isGreaterThan(0);
     assertThat(ack.player().y()).isLessThan(96);
-    Dtos.Player stored = game.load(id).player();
-    assertThat(stored.x()).isEqualTo(ack.player().x());
-    assertThat(stored.y()).isEqualTo(ack.player().y());
+    assertThat(ack.hp()).isEqualTo(40);
+    assertThat(game.load(id).hp()).isEqualTo(40);
+    assertThat(game.move(id, 10, 10, 999).hp()).isEqualTo(WorldViews.MAX_HP);
+    assertThat(game.move(id, 12, 10, null).hp()).isEqualTo(WorldViews.MAX_HP);
+    assertThat(game.load(id).player().x()).isEqualTo(12);
   }
 
   @Test
   void worldSurvivesReloadAndDelete() {
-    game.mine(id, spawnX, groundY);
-    give("log", 3);
+    give("core", 2);
+    giveKills("bat", 3);
     Dtos.WorldView reloaded = game.load(id);
-    assertThat(reloaded.inventory()).containsEntry("dirt", 1).containsEntry("log", 3);
-    assertThat(reloaded.blocks()[groundY * 160 + spawnX]).isZero();
+    assertThat(reloaded.inventory()).containsEntry("core", 2);
+    assertThat(reloaded.kills()).containsEntry("bat", 3);
     assertThat(game.list()).extracting(Dtos.WorldSummary::id).contains(id);
     game.delete(id);
     assertCode(() -> game.load(id), "NOT_FOUND");
@@ -157,142 +199,15 @@ class GameServiceTest {
     assertThat(game.create("另一份", 42L).blocks()).isEqualTo(game.load(id).blocks());
   }
 
-  @Test
-  void sandColumnFallsIntoMinedGap() {
-    int x = spawnX + 4;
-    game.move(id, x + 0.5, groundY + 1.5);
-    paint(x, groundY + 1, 13);
-    paint(x, groundY + 2, 13);
-    paint(x, groundY + 3, 0);
-    paint(x, groundY + 4, 3);
-    Dtos.Mutation result = game.mine(id, x, groundY + 2);
-    assertThat(result.changes()).contains(new Dtos.BlockChange(x, groundY + 1, 0), new Dtos.BlockChange(x, groundY + 3, 13));
-    assertThat(world().get(x, groundY + 3)).isEqualTo(13);
-    assertThat(world().get(x, groundY + 1)).isZero();
-    assertThat(world().get(x, groundY + 4)).isEqualTo(3);
-  }
-
-  @Test
-  void pillarHoldsLooseColumnUntilItIsMined() {
-    int x = spawnX + 4;
-    game.move(id, x + 0.5, groundY + 1.5);
-    paint(x, groundY + 1, 13);
-    paint(x, groundY + 2, 0);
-    paint(x, groundY + 3, 3);
-    paint(x, groundY + 4, 3);
-    paint(x - 1, groundY, 1);
-    game.mine(id, x - 1, groundY);
-    // 沙先落到柱顶停住：柱子还在，就不会继续往下塌。
-    assertThat(world().get(x, groundY + 2)).isEqualTo(13);
-    assertThat(world().get(x, groundY + 1)).isZero();
-    give("wood_pickaxe", 1);
-    game.mine(id, x, groundY + 3);
-    assertThat(world().get(x, groundY + 3)).isEqualTo(13);
-    assertThat(world().get(x, groundY + 2)).isZero();
-  }
-
-  @Test
-  void cohesiveDirtDoesNotFall() {
-    int x = spawnX + 4;
-    game.move(id, x + 0.5, groundY + 1.5);
-    paint(x, groundY + 1, 2);
-    paint(x, groundY + 2, 0);
-    paint(x - 1, groundY, 1);
-    game.mine(id, x - 1, groundY);
-    assertThat(world().get(x, groundY + 1)).isEqualTo(2);
-  }
-
-  @Test
-  void buriedPlayerIsPushedToTopOfTheFallenStack() {
-    paint(spawnX, groundY - 3, 13);
-    paint(spawnX, groundY - 2, 13);
-    paint(spawnX + 1, groundY, 1);
-    Dtos.Mutation result = game.mine(id, spawnX + 1, groundY);
-    assertThat(result.player()).isNotNull();
-    assertThat(result.player().y()).isLessThan(groundY - 2);
-    assertThat(result.message()).contains("塌方");
-    assertThat(game.load(id).player().y()).isEqualTo(result.player().y());
-  }
-
-  @Test
-  void placedSandFallsUntilItRests() {
-    int x = spawnX + 2;
-    game.move(id, x + 0.5, groundY - 1.5);
-    for (int y = groundY - 4; y < groundY; y++) paint(x, y, 0);
-    paint(x, groundY, 1);
-    give("sand", 1);
-    game.place(id, x, groundY - 4, "sand");
-    assertThat(world().get(x, groundY - 1)).isEqualTo(13);
-    assertThat(world().get(x, groundY - 4)).isZero();
-  }
-
-  @Test
-  void ordersStartAtThreeAndDeliverPaysReward() {
-    Dtos.WorldView view = game.load(id);
-    assertThat(view.orders()).hasSize(3);
-    Dtos.Order first = view.orders().get(0);
-    first.wants().forEach((key, count) -> give(key, count));
-    Dtos.Mutation result = game.deliver(id, first.id());
-    assertThat(result.message()).contains("委托");
-    assertThat(result.orders()).hasSize(3);
-    assertThat(result.orders()).extracting(Dtos.Order::id).doesNotContain(first.id());
-    first.reward().forEach((key, count) -> assertThat(result.inventory()).containsEntry(key, count));
-    first.wants().keySet().forEach(key -> assertThat(result.inventory()).doesNotContainKey(key));
-  }
-
-  @Test
-  void deliverWithoutGoodsOrUnknownOrderIsRejected() {
-    Dtos.Order first = game.load(id).orders().get(0);
-    assertCode(() -> game.deliver(id, first.id()), "NO_MATERIAL");
-    assertCode(() -> game.deliver(id, "nope"), "UNKNOWN_ORDER");
-  }
-
-  @Test
-  void expiredOrdersAreReplacedOnLoad() throws Exception {
-    WorldEntity entity = repo.findById(id).orElseThrow();
-    List<Dtos.Order> old = mapper.readValue(entity.getOrdersJson(), new TypeReference<List<Dtos.Order>>() {});
-    List<Dtos.Order> expired = old.stream()
-        .map(o -> new Dtos.Order(o.id(), o.title(), o.wants(), o.reward(), 1L)).toList();
-    entity.setOrdersJson(mapper.writeValueAsString(expired));
-    repo.save(entity);
-    Dtos.WorldView view = game.load(id);
-    assertThat(view.orders()).hasSize(3);
-    List<String> ids = view.orders().stream().map(Dtos.Order::id).toList();
-    assertThat(old.stream().map(Dtos.Order::id).noneMatch(ids::contains)).isTrue();
-  }
-
-  @Test
-  void deliveringAnExpiredOrderIsRejected() throws Exception {
-    WorldEntity entity = repo.findById(id).orElseThrow();
-    List<Dtos.Order> old = mapper.readValue(entity.getOrdersJson(), new TypeReference<List<Dtos.Order>>() {});
-    Dtos.Order stale = new Dtos.Order(old.get(0).id(), old.get(0).title(), old.get(0).wants(), old.get(0).reward(), 1L);
-    List<Dtos.Order> mixed = new java.util.ArrayList<>(old);
-    mixed.set(0, stale);
-    entity.setOrdersJson(mapper.writeValueAsString(mixed));
-    repo.save(entity);
-    assertCode(() -> game.deliver(id, stale.id()), "ORDER_EXPIRED");
-  }
-
-  @Test
-  void orderBoardNeverShowsDuplicateTitles() {
-    for (long seed : new long[] {1L, 42L, 7L, 99L, 2026L}) {
-      Dtos.WorldView view = game.create("单号测试", seed);
-      assertThat(view.orders()).hasSize(3);
-      assertThat(view.orders().stream().map(Dtos.Order::title).toList()).doesNotHaveDuplicates();
-      game.delete(view.id());
+  // 服务端限频比客户端最短冷却（0.32s）更松，测试里按限频间隔等一下再挥下一刀。
+  private Dtos.Mutation kill(String mob) {
+    try {
+      Thread.sleep(260);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException(e);
     }
-  }
-
-  private World world() {
-    WorldEntity entity = repo.findById(id).orElseThrow();
-    return new World(entity.getWidth(), entity.getHeight(),
-        World.decode(entity.getBlocks(), entity.getWidth(), entity.getHeight()),
-        World.decodeSurface(entity.getSurfaceLine(), entity.getWidth()));
-  }
-
-  private Dtos.Mutation mineOre(int blockId) {
-    paint(spawnX + 2, groundY, blockId);
-    return game.mine(id, spawnX + 2, groundY);
+    return game.loot(id, mob);
   }
 
   private void assertCode(Runnable action, String code) {
@@ -300,13 +215,15 @@ class GameServiceTest {
         .isInstanceOfSatisfying(GameException.class, e -> assertThat(e.getCode()).isEqualTo(code));
   }
 
-  private void paint(int x, int y, int blockId) {
+  private List<Dtos.Bounty> storedBounties() throws Exception {
+    String json = repo.findById(id).orElseThrow().getOrdersJson();
+    return json == null || json.isBlank() ? List.of()
+        : mapper.readValue(json, new TypeReference<List<Dtos.Bounty>>() {});
+  }
+
+  private void rewriteBounties(List<Dtos.Bounty> bounties) throws Exception {
     WorldEntity entity = repo.findById(id).orElseThrow();
-    World world = new World(entity.getWidth(), entity.getHeight(),
-        World.decode(entity.getBlocks(), entity.getWidth(), entity.getHeight()),
-        World.decodeSurface(entity.getSurfaceLine(), entity.getWidth()));
-    world.set(x, y, blockId);
-    entity.setBlocks(world.encode());
+    entity.setOrdersJson(mapper.writeValueAsString(bounties));
     repo.save(entity);
   }
 
@@ -315,6 +232,14 @@ class GameServiceTest {
     Map<String, Integer> inventory = read(entity.getInventoryJson());
     inventory.merge(item, count, Integer::sum);
     entity.setInventoryJson(write(inventory));
+    repo.save(entity);
+  }
+
+  private void giveKills(String mob, int count) {
+    WorldEntity entity = repo.findById(id).orElseThrow();
+    Map<String, Integer> kills = read(entity.getKillsJson());
+    kills.merge(mob, count, Integer::sum);
+    entity.setKillsJson(write(kills));
     repo.save(entity);
   }
 
@@ -327,9 +252,9 @@ class GameServiceTest {
     }
   }
 
-  private String write(Map<String, Integer> inventory) {
+  private String write(Map<String, Integer> counts) {
     try {
-      return mapper.writeValueAsString(inventory);
+      return mapper.writeValueAsString(counts);
     } catch (Exception e) {
       throw new IllegalStateException(e);
     }

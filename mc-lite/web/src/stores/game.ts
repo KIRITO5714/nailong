@@ -1,32 +1,32 @@
 import { defineStore } from 'pinia';
 import { computed, ref, shallowRef } from 'vue';
 import { api, ApiError } from '../api';
-import type { Content, Mutation, Order, WorldSummary, WorldView } from '../types';
+import { setPassableBlocks } from '../game/physics';
+import type { Bounty, Content, Mutation, WorldSummary, WorldView } from '../types';
 
-// 方块数组有一万五千格，不做深度响应式：原地改值，再用 revision 通知需要重算的组件。
-// 渲染循环每帧直接读 blocks，不经过 Vue 的依赖追踪。
+// 方块数组有四万六千格，不做深度响应式：原地改值，再用 revision 通知需要重算的组件。
+// 渲染循环每帧直接读 blocks 和怪物数组，不经过 Vue 的依赖追踪。
 export const useGame = defineStore('game', () => {
   const content = ref<Content | null>(null);
   const worlds = ref<WorldSummary[]>([]);
   const world = shallowRef<WorldView | null>(null);
   const revision = ref(0);
   const inventory = ref<Record<string, number>>({});
-  const toolTier = ref(0);
-  const toolName = ref('徒手');
-  const selected = ref<string | null>(null);
-  // 物理位置在 Canvas 组件内部逐帧跑，这里存一份节流后的副本，给合成面板判断工作台距离用。
-  const playerPos = ref({ x: 0, y: 0 });
-  const mode = ref<'mine' | 'place'>('mine');
+  const kills = ref<Record<string, number>>({});
+  const hp = ref(100);
+  const weaponTier = ref(0);
+  const weaponName = ref('徒手');
   const craftOpen = ref(false);
-  const postOpen = ref(false);
-  const orders = ref<Order[]>([]);
-  // 服务端时钟与本地时钟的差：倒计时用服务端时间算，改本机时间也骗不过限时。
+  const bountyOpen = ref(false);
+  const bounties = ref<Bounty[]>([]);
+  // 服务端时钟与本地时钟的差：悬赏倒计时用服务端时间算，改本机时间也骗不过限时。
   const nowOffset = ref(0);
-  // 塌方把玩家顶出来时服务端会回传新坐标，Canvas 监听序号做瞬移。
-  const teleport = ref<{ x: number; y: number; n: number } | null>(null);
+  // 死亡由客户端判定（血量归零），重生点用出生列，服务端只在 move 时收到新血量。
+  const dead = ref(false);
   const notice = ref<{ text: string; tone: 'ok' | 'warn' } | null>(null);
   const booting = ref(true);
   const fatal = ref('');
+  const pending = ref(0);
 
   const blockDefs = computed(() => {
     const map = new Map<number, Content['blocks'][number]>();
@@ -34,13 +34,20 @@ export const useGame = defineStore('game', () => {
     return map;
   });
 
-  const toolSpeed = computed(() => content.value?.tools.find((t) => t.tier === toolTier.value)?.speed ?? 1);
+  const weapon = computed(() => {
+    const list = content.value?.weapons ?? [];
+    return list.find((w) => w.tier === weaponTier.value) ?? list[0];
+  });
 
+  const mobDefs = computed(() => content.value?.mobs ?? []);
+
+  // 背包按「武器在前、材料在后」排，热键 1-9 才有稳定含义（服务端返回的是插入序）。
   const hotbar = computed(() => {
     void revision.value;
     const items = content.value?.items ?? {};
     return Object.keys(items)
       .filter((key) => (inventory.value[key] ?? 0) > 0)
+      .sort((a, b) => (items[b].weapon ?? 0) - (items[a].weapon ?? 0))
       .map((key) => ({ key, count: inventory.value[key], def: items[key] }));
   });
 
@@ -52,23 +59,18 @@ export const useGame = defineStore('game', () => {
   }
 
   function fail(e: unknown) {
+    // 挥砍太快是客户端冷却没对齐，静默丢掉即可，不该刷屏。
+    if (e instanceof ApiError && e.code === 'LOOT_TOO_FAST') return false;
     toast(e instanceof ApiError ? e.message : '网络不通，这一步没做成', 'warn');
     return false;
   }
 
   function apply(mutation: Mutation) {
-    const view = world.value;
-    if (!view) return;
-    for (const change of mutation.changes) view.blocks[change.y * view.width + change.x] = change.id;
     inventory.value = mutation.inventory;
-    toolTier.value = mutation.toolTier;
-    toolName.value = mutation.toolName;
-    if (selected.value && !(inventory.value[selected.value] > 0)) selected.value = null;
-    if (mutation.player) {
-      playerPos.value = { x: mutation.player.x, y: mutation.player.y };
-      teleport.value = { ...mutation.player, n: (teleport.value?.n ?? 0) + 1 };
-    }
-    if (mutation.orders) orders.value = mutation.orders;
+    kills.value = mutation.kills;
+    weaponTier.value = mutation.weaponTier;
+    weaponName.value = mutation.weaponName;
+    if (mutation.bounties) bounties.value = mutation.bounties;
     revision.value++;
     if (mutation.message) toast(mutation.message);
   }
@@ -76,6 +78,7 @@ export const useGame = defineStore('game', () => {
   async function boot() {
     try {
       content.value = await api.content();
+      setPassableBlocks(content.value.blocks.filter((b) => b.passable).map((b) => b.id));
       worlds.value = await api.worlds();
     } catch (e) {
       fatal.value = e instanceof ApiError ? e.message : '连不上后端，先确认 Spring Boot 已经跑在 8080';
@@ -107,15 +110,15 @@ export const useGame = defineStore('game', () => {
   function enter(view: WorldView) {
     world.value = view;
     inventory.value = view.inventory;
-    toolTier.value = view.toolTier;
-    toolName.value = view.toolName;
-    selected.value = null;
-    mode.value = 'mine';
+    kills.value = view.kills;
+    hp.value = view.hp;
+    weaponTier.value = view.weaponTier;
+    weaponName.value = view.weaponName;
     craftOpen.value = false;
-    postOpen.value = false;
-    orders.value = view.orders;
+    bountyOpen.value = false;
+    bounties.value = view.bounties;
     nowOffset.value = view.now - Date.now();
-    playerPos.value = { x: view.player.x, y: view.player.y };
+    dead.value = view.hp <= 0;
     revision.value++;
   }
 
@@ -133,35 +136,26 @@ export const useGame = defineStore('game', () => {
   function leave() {
     world.value = null;
     inventory.value = {};
-    selected.value = null;
-    orders.value = [];
-    postOpen.value = false;
+    kills.value = {};
+    bounties.value = [];
+    hp.value = 100;
+    dead.value = false;
     craftOpen.value = false;
+    bountyOpen.value = false;
     revision.value++;
   }
 
-  async function mine(x: number, y: number) {
-    if (!world.value) return false;
-    try {
-      apply(await api.mine(world.value.id, x, y));
-      return true;
-    } catch (e) {
-      return fail(e);
-    }
-  }
-
-  async function place(x: number, y: number) {
+  // 客户端已经算出这只怪死了，服务端补掉落与击杀数；并发上限用来挡住连点。
+  async function reportKill(mobKey: string) {
     const view = world.value;
-    if (!view) return false;
-    if (!selected.value) {
-      toast('先在下面背包里点一个要放的方块', 'warn');
-      return false;
-    }
+    if (!view || pending.value >= 3) return;
+    pending.value++;
     try {
-      apply(await api.place(view.id, x, y, selected.value));
-      return true;
+      apply(await api.loot(view.id, mobKey));
     } catch (e) {
-      return fail(e);
+      fail(e);
+    } finally {
+      pending.value--;
     }
   }
 
@@ -175,33 +169,39 @@ export const useGame = defineStore('game', () => {
     }
   }
 
-  async function syncOrders() {
+  async function syncBounties() {
     if (!world.value) return;
     try {
-      const view = await api.orders(world.value.id);
-      orders.value = view.orders;
+      const view = await api.bounties(world.value.id);
+      bounties.value = view.bounties;
       nowOffset.value = view.now - Date.now();
     } catch {
-      // 面板轮询失败不打断游戏，下一轮再试。
+      // 面板轮询失败不打断战斗，下一轮再试。
     }
   }
 
-  async function deliver(orderId: string) {
+  async function deliver(bountyId: string) {
     if (!world.value) return false;
     try {
-      apply(await api.deliver(world.value.id, orderId));
+      apply(await api.deliver(world.value.id, bountyId));
       return true;
     } catch (e) {
       return fail(e);
     }
   }
 
-  // 位置由客户端物理算出来，这里只负责定期报给服务端存档 + 作为距离判定依据。
-  function syncPosition(x: number, y: number) {
+  // 位置与血量由客户端物理算出来，这里定期报给服务端存档。
+  function syncPlayer(x: number, y: number, currentHp: number) {
     const view = world.value;
     if (!view) return;
-    playerPos.value = { x, y };
-    void api.move(view.id, x, y).catch(() => {});
+    hp.value = currentHp;
+    void api.move(view.id, x, y, currentHp).catch(() => {});
+  }
+
+  function respawn() {
+    dead.value = false;
+    hp.value = 100;
+    revision.value++;
   }
 
   function blockAt(x: number, y: number) {
@@ -211,8 +211,9 @@ export const useGame = defineStore('game', () => {
   }
 
   return {
-    content, worlds, world, revision, inventory, toolTier, toolName, selected, playerPos, mode, craftOpen, notice,
-    postOpen, orders, nowOffset, teleport, booting, fatal, blockDefs, toolSpeed, hotbar,
-    boot, createWorld, openWorld, deleteWorld, leave, mine, place, craft, syncOrders, deliver, syncPosition, blockAt, toast,
+    content, worlds, world, revision, inventory, kills, hp, weaponTier, weaponName, craftOpen, bountyOpen,
+    bounties, nowOffset, dead, notice, booting, fatal, blockDefs, weapon, mobDefs, hotbar,
+    boot, createWorld, openWorld, deleteWorld, leave, reportKill, craft, syncBounties, deliver,
+    syncPlayer, respawn, blockAt, toast,
   };
 });

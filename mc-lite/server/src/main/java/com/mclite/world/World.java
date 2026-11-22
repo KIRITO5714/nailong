@@ -6,8 +6,8 @@ public class World {
   public final int width;
   public final int height;
   public final int[] blocks;
-  // 地形线在生成时定下并存档：树冠不算地表，挖掉草方块也不改它，
-  // 否则树冠下的空气会被当成地下洞穴涂黑。
+  // 地形线在生成时定下并存档：树冠和地表荧光晶都不算地表，
+  // 否则树冠下的空气会被当成地下涂黑。
   private final int[] surface;
 
   public World(int width, int height, int[] blocks, int[] surface) {
@@ -40,7 +40,7 @@ public class World {
     return surface;
   }
 
-  // 一个方块一个字符（'A' + id），15360 格的世界存成 15KB 文本，比 JSON 数组小一个量级。
+  // 一个方块一个字符（'A' + id），480×96 的世界存成 45KB 文本，比 JSON 数组小一个量级。
   public String encode() {
     char[] chars = new char[blocks.length];
     for (int i = 0; i < blocks.length; i++) chars[i] = (char) ('A' + blocks[i]);

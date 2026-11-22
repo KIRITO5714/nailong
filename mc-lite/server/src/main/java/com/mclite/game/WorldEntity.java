@@ -28,11 +28,18 @@ public class WorldEntity {
   @Lob
   private String inventoryJson;
 
+  // 列名沿用旧存档的 orders_json，现在存的是悬赏板。
   @Lob
   private String ordersJson;
 
+  @Lob
+  private String killsJson;
+
   // 可空：旧存档没有这一列，Hibernate 加列时不能带 NOT NULL，读的时候按 0 兜底。
   private Integer orderSeq;
+
+  // 可空：旧存档没有血量列，null 按满血兜底。
+  private Integer playerHp;
 
   private double playerX;
   private double playerY;
@@ -57,8 +64,12 @@ public class WorldEntity {
   public void setInventoryJson(String inventoryJson) { this.inventoryJson = inventoryJson; }
   public String getOrdersJson() { return ordersJson; }
   public void setOrdersJson(String ordersJson) { this.ordersJson = ordersJson; }
+  public String getKillsJson() { return killsJson; }
+  public void setKillsJson(String killsJson) { this.killsJson = killsJson; }
   public Integer getOrderSeq() { return orderSeq; }
   public void setOrderSeq(Integer orderSeq) { this.orderSeq = orderSeq; }
+  public Integer getPlayerHp() { return playerHp; }
+  public void setPlayerHp(Integer playerHp) { this.playerHp = playerHp; }
   public double getPlayerX() { return playerX; }
   public void setPlayerX(double playerX) { this.playerX = playerX; }
   public double getPlayerY() { return playerY; }

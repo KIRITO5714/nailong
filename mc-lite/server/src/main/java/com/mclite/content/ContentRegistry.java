@@ -11,7 +11,7 @@ import java.util.Map;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
-// 全部数值来自 content.json，代码里不写死任何方块/配方，改内容不用重新编译逻辑。
+// 全部数值来自 content.json，代码里不写死任何怪物/武器/配方，改内容不用重新编译逻辑。
 @Component
 public class ContentRegistry {
 
@@ -19,8 +19,9 @@ public class ContentRegistry {
   private final ObjectMapper mapper;
   private final Map<Integer, BlockDef> blocksById;
   private final Map<String, ItemDef> items;
-  private final Map<Integer, ToolDef> toolsByTier;
+  private final Map<Integer, WeaponDef> weaponsByTier;
   private final Map<String, RecipeDef> recipes;
+  private final Map<String, MobDef> mobs;
 
   public ContentRegistry(ObjectMapper mapper) throws IOException {
     this.mapper = mapper;
@@ -32,13 +33,17 @@ public class ContentRegistry {
       blocksById.put(block.id(), block);
     }
     items = mapper.convertValue(raw.get("items"), new TypeReference<LinkedHashMap<String, ItemDef>>() {});
-    toolsByTier = new LinkedHashMap<>();
-    for (ToolDef tool : mapper.treeToValue(raw.get("tools"), ToolDef[].class)) {
-      toolsByTier.put(tool.tier(), tool);
+    weaponsByTier = new LinkedHashMap<>();
+    for (WeaponDef weapon : mapper.treeToValue(raw.get("weapons"), WeaponDef[].class)) {
+      weaponsByTier.put(weapon.tier(), weapon);
     }
     recipes = new LinkedHashMap<>();
     for (RecipeDef recipe : mapper.treeToValue(raw.get("recipes"), RecipeDef[].class)) {
       recipes.put(recipe.id(), recipe);
+    }
+    mobs = new LinkedHashMap<>();
+    for (MobDef mob : mapper.treeToValue(raw.get("mobs"), MobDef[].class)) {
+      mobs.put(mob.key(), mob);
     }
   }
 
@@ -56,24 +61,28 @@ public class ContentRegistry {
     return items.get(key);
   }
 
-  public ToolDef tool(int tier) {
-    return toolsByTier.getOrDefault(tier, toolsByTier.get(0));
+  public WeaponDef weapon(int tier) {
+    return weaponsByTier.getOrDefault(tier, weaponsByTier.get(0));
   }
 
   public RecipeDef recipe(String id) {
     return recipes.get(id);
   }
 
-  public int workbenchBlockId() {
-    return blocksById.values().stream().filter(b -> b.key().equals("workbench")).findFirst().orElseThrow().id();
+  public MobDef mob(String key) {
+    return mobs.get(key);
   }
 
-  public JsonNode orders() {
-    return raw.get("orders");
+  public List<MobDef> mobs() {
+    return List.copyOf(mobs.values());
   }
 
-  public int orderSlots() {
-    return orders().get("slots").asInt(3);
+  public JsonNode bounties() {
+    return raw.get("bounties");
+  }
+
+  public int bountySlots() {
+    return bounties().get("slots").asInt(3);
   }
 
   public Map<String, Integer> counts(JsonNode node) {

@@ -1,4 +1,4 @@
-import type { Content, Mutation, OrdersView, WorldSummary, WorldView } from './types';
+import type { Ack, BountiesView, Content, Mutation, WorldSummary, WorldView } from './types';
 
 export class ApiError extends Error {
   constructor(public code: string, message: string) {
@@ -22,12 +22,12 @@ export const api = {
   worlds: () => req<WorldSummary[]>('/worlds'),
   create: (name: string, seed?: number) => req<WorldView>('/worlds', 'POST', { name, seed }),
   load: (id: string) => req<WorldView>(`/worlds/${id}`),
-  remove: (id: string) => req<{ ok: boolean }>(`/worlds/${id}`, 'DELETE'),
-  mine: (id: string, x: number, y: number) => req<Mutation>(`/worlds/${id}/mine`, 'POST', { x, y }),
-  place: (id: string, x: number, y: number, item: string) =>
-    req<Mutation>(`/worlds/${id}/place`, 'POST', { x, y, item }),
+  remove: (id: string) => req<Ack>(`/worlds/${id}`, 'DELETE'),
+  // 客户端判定挥砍命中，服务端只结算「这只怪死了」：掉落表与击杀计数都在后端。
+  loot: (id: string, mob: string) => req<Mutation>(`/worlds/${id}/loot`, 'POST', { mob }),
   craft: (id: string, recipeId: string) => req<Mutation>(`/worlds/${id}/craft`, 'POST', { recipeId }),
-  orders: (id: string) => req<OrdersView>(`/worlds/${id}/orders`),
-  deliver: (id: string, orderId: string) => req<Mutation>(`/worlds/${id}/deliver`, 'POST', { orderId }),
-  move: (id: string, x: number, y: number) => req<{ ok: boolean }>(`/worlds/${id}/move`, 'POST', { x, y }),
+  bounties: (id: string) => req<BountiesView>(`/worlds/${id}/bounties`),
+  deliver: (id: string, bountyId: string) => req<Mutation>(`/worlds/${id}/deliver`, 'POST', { bountyId }),
+  move: (id: string, x: number, y: number, hp?: number) =>
+    req<Ack>(`/worlds/${id}/move`, 'POST', { x, y, hp }),
 };
