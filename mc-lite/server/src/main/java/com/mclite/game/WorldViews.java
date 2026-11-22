@@ -62,10 +62,15 @@ public class WorldViews {
     return Math.max(0, Math.min(MAX_HP, hp));
   }
 
+  public boolean clearedOf(WorldEntity entity) {
+    return Boolean.TRUE.equals(entity.getCleared());
+  }
+
   public Dtos.WorldView view(WorldEntity entity, World world, Map<String, Integer> inventory) {
     long now = System.currentTimeMillis();
+    Map<String, Integer> kills = readKills(entity.getKillsJson());
     Bounties.Board board = Bounties.refresh(readBounties(entity.getOrdersJson()), Bounties.seqOf(entity.getOrderSeq()),
-        entity.getSeed(), now, content);
+        entity.getSeed(), now, kills, content);
     if (board.changed()) {
       persistBoard(entity, board);
       entity.setUpdatedAt(Instant.now());
@@ -74,14 +79,14 @@ public class WorldViews {
     int tier = Inventories.weaponTier(content, inventory);
     return new Dtos.WorldView(entity.getId(), entity.getName(), entity.getSeed(), world.width, world.height,
         world.blocks, world.surface(), new Dtos.Player(entity.getPlayerX(), entity.getPlayerY()),
-        inventory, readKills(entity.getKillsJson()), hpOf(entity),
+        inventory, kills, hpOf(entity), clearedOf(entity),
         tier, content.weapon(tier).name(), board.bounties(), now);
   }
 
   public Dtos.Mutation mutation(Map<String, Integer> inventory, Map<String, Integer> kills,
-                                String message, List<Dtos.Bounty> bounties) {
+                                String message, boolean cleared, List<Dtos.Bounty> bounties) {
     int tier = Inventories.weaponTier(content, inventory);
-    return new Dtos.Mutation(true, inventory, kills, tier, content.weapon(tier).name(), message, bounties);
+    return new Dtos.Mutation(true, inventory, kills, tier, content.weapon(tier).name(), message, cleared, bounties);
   }
 
   private <T> T read(String json, TypeReference<T> type) {

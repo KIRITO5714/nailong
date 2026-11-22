@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref, shallowRef } from 'vue';
 import { api, ApiError } from '../api';
 import { setPassableBlocks } from '../game/physics';
-import type { Bounty, Content, Mutation, WorldSummary, WorldView } from '../types';
+import type { Bounty, Content, Mutation, Progression, WorldSummary, WorldView } from '../types';
 
 // 方块数组有四万六千格，不做深度响应式：原地改值，再用 revision 通知需要重算的组件。
 // 渲染循环每帧直接读 blocks 和怪物数组，不经过 Vue 的依赖追踪。
@@ -23,6 +23,9 @@ export const useGame = defineStore('game', () => {
   const nowOffset = ref(0);
   // 死亡由客户端判定（血量归零），重生点用出生列，服务端只在 move 时收到新血量。
   const dead = ref(false);
+  // 通关：cleared 是存档里的持久状态（顶栏徽章用），victory 只在「刚打死 Boss」那一次为 true。
+  const cleared = ref(false);
+  const victory = ref(false);
   const notice = ref<{ text: string; tone: 'ok' | 'warn' } | null>(null);
   const booting = ref(true);
   const fatal = ref('');
@@ -41,6 +44,14 @@ export const useGame = defineStore('game', () => {
 
   const mobDefs = computed(() => content.value?.mobs ?? []);
 
+  // 分区规则全部来自内容表，客户端只按玩家离出生点的距离算当前区。
+  const progression = computed<Progression>(() => content.value?.progression
+    ?? { zoneWidth: 15, zoneCount: 14, lairWidth: 36, signatureChance: 0.6 });
+
+  const spawnColumn = computed(() => Math.floor((world.value?.width ?? 0) / 2));
+
+  const bossDef = computed(() => mobDefs.value.find((m) => m.boss) ?? null);
+
   // 背包按「武器在前、材料在后」排，热键 1-9 才有稳定含义（服务端返回的是插入序）。
   const hotbar = computed(() => {
     void revision.value;
@@ -50,6 +61,9 @@ export const useGame = defineStore('game', () => {
       .sort((a, b) => (items[b].weapon ?? 0) - (items[a].weapon ?? 0))
       .map((key) => ({ key, count: inventory.value[key], def: items[key] }));
   });
+
+  const totalKills = computed(() => Object.values(kills.value).reduce((sum, n) => sum + n, 0));
+  const kindsKilled = computed(() => Object.keys(kills.value).length);
 
   function toast(text: string, tone: 'ok' | 'warn' = 'ok') {
     notice.value = { text, tone };
@@ -71,6 +85,9 @@ export const useGame = defineStore('game', () => {
     weaponTier.value = mutation.weaponTier;
     weaponName.value = mutation.weaponName;
     if (mutation.bounties) bounties.value = mutation.bounties;
+    // 通关界面只在「从没通关变成通关」那一次弹，之后读档只显示顶栏徽章。
+    if (mutation.cleared && !cleared.value) victory.value = true;
+    cleared.value = mutation.cleared;
     revision.value++;
     if (mutation.message) toast(mutation.message);
   }
@@ -119,6 +136,8 @@ export const useGame = defineStore('game', () => {
     bounties.value = view.bounties;
     nowOffset.value = view.now - Date.now();
     dead.value = view.hp <= 0;
+    cleared.value = view.cleared;
+    victory.value = false;
     revision.value++;
   }
 
@@ -140,6 +159,8 @@ export const useGame = defineStore('game', () => {
     bounties.value = [];
     hp.value = 100;
     dead.value = false;
+    cleared.value = false;
+    victory.value = false;
     craftOpen.value = false;
     bountyOpen.value = false;
     revision.value++;
@@ -212,7 +233,8 @@ export const useGame = defineStore('game', () => {
 
   return {
     content, worlds, world, revision, inventory, kills, hp, weaponTier, weaponName, craftOpen, bountyOpen,
-    bounties, nowOffset, dead, notice, booting, fatal, blockDefs, weapon, mobDefs, hotbar,
+    bounties, nowOffset, dead, cleared, victory, notice, booting, fatal, blockDefs, weapon, mobDefs, hotbar,
+    progression, spawnColumn, bossDef, totalKills, kindsKilled,
     boot, createWorld, openWorld, deleteWorld, leave, reportKill, craft, syncBounties, deliver,
     syncPlayer, respawn, blockAt, toast,
   };

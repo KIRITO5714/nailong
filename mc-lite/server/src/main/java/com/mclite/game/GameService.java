@@ -60,6 +60,7 @@ public class GameService {
     entity.setInventoryJson("{}");
     entity.setKillsJson("{}");
     entity.setPlayerHp(WorldViews.MAX_HP);
+    entity.setCleared(false);
     views.persistBoard(entity, Bounties.initial(content, actualSeed, System.currentTimeMillis()));
     entity.setPlayerX(spawn[0]);
     entity.setPlayerY(spawn[1]);
@@ -98,10 +99,17 @@ public class GameService {
       Map<String, Integer> drops = Loot.roll(content, mob, new Random());
       drops.forEach((key, count) -> Inventories.add(s.inventory(), key, count));
       s.entity().setKillsJson(views.writeKills(kills));
-      save(s);
+      boolean cleared = views.clearedOf(s.entity());
       String message = "击杀" + mob.name() + (drops.isEmpty() ? "，什么也没掉"
           : "，拾获 " + Inventories.describe(content, drops));
-      return views.mutation(s.inventory(), kills, message, null);
+      // Boss 只在地图最东端的巢穴里出现（客户端判定），服务端只认这一句「它死了」并写下通关标记。
+      if (mob.boss() && !cleared) {
+        s.entity().setCleared(true);
+        cleared = true;
+        message = "讨伐了" + mob.name() + "，世界通关！";
+      }
+      save(s);
+      return views.mutation(s.inventory(), kills, message, cleared, null);
     }
   }
 
@@ -119,7 +127,8 @@ public class GameService {
       save(s);
       String message = "合成了" + recipe.name();
       if (after > before) message += "，武器升级成" + content.weapon(after).name();
-      return views.mutation(s.inventory(), views.readKills(s.entity().getKillsJson()), message, null);
+      return views.mutation(s.inventory(), views.readKills(s.entity().getKillsJson()), message,
+          views.clearedOf(s.entity()), null);
     }
   }
 
@@ -128,7 +137,8 @@ public class GameService {
       Session s = open(id);
       long now = System.currentTimeMillis();
       Bounties.Board board = Bounties.refresh(views.readBounties(s.entity().getOrdersJson()),
-          Bounties.seqOf(s.entity().getOrderSeq()), s.entity().getSeed(), now, content);
+          Bounties.seqOf(s.entity().getOrderSeq()), s.entity().getSeed(), now,
+          views.readKills(s.entity().getKillsJson()), content);
       views.persistBoard(s.entity(), board);
       save(s);
       return new Dtos.BountiesView(board.bounties(), now);
@@ -152,12 +162,12 @@ public class GameService {
       List<Dtos.Bounty> left = new ArrayList<>(all);
       left.remove(bounty);
       Bounties.Board board = Bounties.refresh(left, Bounties.seqOf(s.entity().getOrderSeq()),
-          s.entity().getSeed(), now, content);
+          s.entity().getSeed(), now, kills, content);
       views.persistBoard(s.entity(), board);
       s.entity().setKillsJson(views.writeKills(kills));
       save(s);
       String message = "悬赏「" + bounty.title() + "」完成！赏金 " + Inventories.describe(content, bounty.reward());
-      return views.mutation(s.inventory(), kills, message, board.bounties());
+      return views.mutation(s.inventory(), kills, message, views.clearedOf(s.entity()), board.bounties());
     }
   }
 

@@ -27,13 +27,14 @@ public final class Dtos {
 
   public record WorldView(String id, String name, long seed, int width, int height, int[] blocks,
                           int[] surface, Player player, Map<String, Integer> inventory,
-                          Map<String, Integer> kills, int hp,
+                          Map<String, Integer> kills, int hp, boolean cleared,
                           int weaponTier, String weaponName, List<Bounty> bounties, long now) {}
 
   public record WorldSummary(String id, String name, long seed, int width, int height, Instant updatedAt) {}
 
   public record Mutation(boolean ok, Map<String, Integer> inventory, Map<String, Integer> kills,
-                         int weaponTier, String weaponName, String message, List<Bounty> bounties) {}
+                         int weaponTier, String weaponName, String message, boolean cleared,
+                         List<Bounty> bounties) {}
 
   public record Ack(boolean ok, Player player, Integer hp) {}
 

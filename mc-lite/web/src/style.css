@@ -159,6 +159,16 @@ body {
   text-shadow: 1px 1px 0 #000;
 }
 
+.clear-badge {
+  padding: 4px 10px;
+  border: 2px solid #57a83c;
+  background: #24381f;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .dead {
   position: absolute;
   inset: 0;
@@ -265,59 +275,7 @@ body {
   .touch { display: none; }
 }
 
-/* 合成面板 */
-.craft {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(430px, 100%);
-  z-index: 6;
-  overflow-y: auto;
-  background: var(--panel-2);
-  border-left: 2px solid var(--line);
-  padding: 12px;
-}
-.craft-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.craft-head h2 { margin: 0; font-size: 16px; color: var(--accent); }
-.craft-bench { flex: 1; font-size: 11px; color: var(--warn); }
-.craft-bench.on { color: var(--accent); }
-.craft-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.craft-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px;
-  background: var(--panel);
-  border: 2px solid var(--line);
-}
-.craft-icon { width: 40px; height: 40px; image-rendering: pixelated; flex: 0 0 auto; }
-.craft-body { flex: 1; min-width: 0; display: grid; gap: 3px; }
-.craft-name { font-size: 14px; font-weight: 700; }
-.craft-name em { margin-left: 6px; font-size: 11px; font-style: normal; color: var(--gold); }
-.craft-cost, .craft-out { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; color: var(--muted); }
-.craft-cost .short { color: var(--warn); }
-.craft-note { margin: 12px 0 0; font-size: 12px; color: var(--muted); line-height: 1.8; }
-.post-timer { margin-left: 6px; font-size: 11px; font-style: normal; color: var(--muted); }
-.post-timer.urgent { color: var(--warn); font-weight: 700; }
-
-.toast {
-  position: fixed;
-  left: 50%;
-  bottom: 100px;
-  transform: translateX(-50%);
-  z-index: 30;
-  max-width: min(92vw, 520px);
-  padding: 10px 14px;
-  font-size: 13px;
-  background: rgba(20, 24, 33, 0.95);
-  border: 2px solid var(--accent);
-  color: var(--ink);
-  text-align: center;
-}
-.toast.warn { border-color: var(--warn); color: #ffd9c9; }
-.fade-enter-active, .fade-leave-active { transition: opacity 0.18s; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+/* 面板、Boss 血条、通关界面与提示条的样式在 panels.css 里。 */
 
 @media (max-width: 640px) {
   .topbar { flex-wrap: wrap; gap: 6px; padding: 6px 8px; }
@@ -329,5 +287,4 @@ body {
   .hotbar { min-height: 66px; }
   .touch { bottom: 78px; }
   .pad { width: 56px; height: 56px; }
-  .craft { width: 100%; border-left: none; }
 }

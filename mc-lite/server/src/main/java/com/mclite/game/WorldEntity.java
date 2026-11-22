@@ -41,6 +41,9 @@ public class WorldEntity {
   // 可空：旧存档没有血量列，null 按满血兜底。
   private Integer playerHp;
 
+  // 可空：旧存档没有通关标记，null 按未通关兜底（同样不能加 NOT NULL）。
+  private Boolean cleared;
+
   private double playerX;
   private double playerY;
   private Instant createdAt;
@@ -70,6 +73,8 @@ public class WorldEntity {
   public void setOrderSeq(Integer orderSeq) { this.orderSeq = orderSeq; }
   public Integer getPlayerHp() { return playerHp; }
   public void setPlayerHp(Integer playerHp) { this.playerHp = playerHp; }
+  public Boolean getCleared() { return cleared; }
+  public void setCleared(Boolean cleared) { this.cleared = cleared; }
   public double getPlayerX() { return playerX; }
   public void setPlayerX(double playerX) { this.playerX = playerX; }
   public double getPlayerY() { return playerY; }

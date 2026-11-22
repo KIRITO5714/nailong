@@ -1,4 +1,4 @@
-import type { MobDef, WeaponDef, WorldView } from '../types';
+import type { MobDef, Progression, WeaponDef, WorldView } from '../types';
 import { hits, moveBox, roomFor, solid, PLAYER_H, PLAYER_W, type Player } from './physics';
 
 // 怪物全在客户端模拟（和玩家物理同一层）：走位、追击、接触伤害都在这里算，
@@ -47,6 +47,7 @@ export function createMob(def: MobDef, x: number, y: number): Mob {
 
 function pickDef(defs: MobDef[]): MobDef {
   const total = defs.reduce((sum, d) => sum + d.weight, 0);
+  if (total <= 0) return defs[0];
   let roll = Math.random() * total;
   for (const def of defs) {
     roll -= def.weight;
@@ -55,14 +56,35 @@ function pickDef(defs: MobDef[]): MobDef {
   return defs[defs.length - 1];
 }
 
+// 难度分区：zone = min(zoneCount-1, floor(|x - 出生点| / zoneWidth))，越远越硬。
+export function zoneOf(x: number, spawnX: number, rules: Progression) {
+  return Math.min(rules.zoneCount - 1, Math.floor(Math.abs(x - spawnX) / rules.zoneWidth));
+}
+
+// 巢穴是地图最东端的 lairWidth 列：里面不刷普通怪，只有 Boss。
+export function lairStart(view: WorldView, rules: Progression) {
+  return view.width - rules.lairWidth;
+}
+
+// 本区招牌怪有 signatureChance 的概率出场，否则在已解锁的怪里按 weight 抽一只。
+function pickForZone(defs: MobDef[], zone: number, rules: Progression): MobDef {
+  const open = defs.filter((d) => !d.boss && d.zone <= zone);
+  const signature = open.find((d) => d.zone === zone);
+  if (signature && Math.random() < rules.signatureChance) return signature;
+  return pickDef(open.length ? open : defs.filter((d) => !d.boss));
+}
+
 // 刷怪只挑玩家两侧、离得够远又站得住的列：不凭空出现在脸上，也不卡在方块里。
-export function spawnOne(defs: MobDef[], view: WorldView, player: Player): Mob | null {
+export function spawnOne(defs: MobDef[], view: WorldView, player: Player,
+                         rules: Progression, spawnX: number): Mob | null {
+  const zone = zoneOf(player.x, spawnX, rules);
+  const lair = lairStart(view, rules);
   for (let attempt = 0; attempt < 12; attempt++) {
-    const def = pickDef(defs);
+    const def = pickForZone(defs, zone, rules);
     const side = Math.random() < 0.5 ? -1 : 1;
     const distance = SPAWN_NEAR + Math.random() * (SPAWN_FAR - SPAWN_NEAR);
     const x = Math.round(player.x + side * distance);
-    if (x < 2 || x >= view.width - 2) continue;
+    if (x < 2 || x >= lair) continue;
     const ground = view.surface[x];
     // 飞行怪悬在地表上方，树冠也在那一层；地面怪要能站住，飞行怪只要这块空间是空的。
     const y = def.flying ? ground - 3 - Math.random() * 3 : ground - def.h / 2 - 0.05;
@@ -72,6 +94,27 @@ export function spawnOne(defs: MobDef[], view: WorldView, player: Player): Mob |
     if (free) return createMob(def, x + 0.5, y);
   }
   return null;
+}
+
+// Boss 从巢穴东端往西找一个站得住的位置落地，一次只有一只；玩家走出巢穴由 clearBoss 收回。
+export function spawnBoss(defs: MobDef[], view: WorldView, rules: Progression): Mob | null {
+  const boss = defs.find((d) => d.boss);
+  if (!boss) return null;
+  for (let x = view.width - 4; x >= lairStart(view, rules) + 2; x--) {
+    const y = view.surface[x] - boss.h / 2 - 0.05;
+    if (roomFor(view, x + 0.5, y, boss.w, boss.h)) return createMob(boss, x + 0.5, y);
+  }
+  return null;
+}
+
+export function bossOf(mobs: Mob[]): Mob | null {
+  return mobs.find((m) => m.def.boss && m.dying === 0) ?? null;
+}
+
+export function clearBoss(mobs: Mob[]) {
+  for (let i = mobs.length - 1; i >= 0; i--) {
+    if (mobs[i].def.boss) mobs.splice(i, 1);
+  }
 }
 
 export function stepMobs(mobs: Mob[], view: WorldView, player: Player, dt: number, events: MobEvents) {

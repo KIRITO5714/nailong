@@ -7,6 +7,7 @@ import CraftPanel from './components/CraftPanel.vue';
 import BountyPanel from './components/BountyPanel.vue';
 import TouchControls from './components/TouchControls.vue';
 import WorldPicker from './components/WorldPicker.vue';
+import VictoryPanel from './components/VictoryPanel.vue';
 
 const game = useGame();
 onMounted(() => game.boot());
@@ -21,6 +22,7 @@ onMounted(() => game.boot());
         <div class="weapon-badge" :title="'武器等级 T' + game.weaponTier">
           {{ game.weaponName }} · T{{ game.weaponTier }}
         </div>
+        <div v-if="game.cleared" class="clear-badge" title="已经打死巢穴里的 Boss">已通关</div>
         <div class="topbar-actions">
           <button class="btn btn-ghost" @click="game.bountyOpen = !game.bountyOpen; game.craftOpen = false">悬赏 (F)</button>
           <button class="btn btn-ghost" @click="game.craftOpen = !game.craftOpen; game.bountyOpen = false">锻造 (E)</button>
@@ -39,6 +41,7 @@ onMounted(() => game.boot());
       <TouchControls />
       <CraftPanel v-if="game.craftOpen" />
       <BountyPanel v-if="game.bountyOpen" />
+      <VictoryPanel v-if="game.victory" />
     </main>
 
     <transition name="fade">

@@ -37,6 +37,9 @@ export interface DropDef {
 export interface MobDef {
   key: string;
   name: string;
+  // 难度分区：zone 越大越硬，客户端按玩家离出生点的距离决定能刷到哪些怪。
+  zone: number;
+  boss?: boolean;
   hp: number;
   damage: number;
   speed: number;
@@ -45,9 +48,18 @@ export interface MobDef {
   w: number;
   h: number;
   weight: number;
+  // 贴图形状：7 种造型复用给 15 只怪，见 game/mobArt.ts。
+  shape: string;
   color: string;
   accent: string;
   drops: DropDef[];
+}
+
+export interface Progression {
+  zoneWidth: number;
+  zoneCount: number;
+  lairWidth: number;
+  signatureChance: number;
 }
 
 export interface RecipeDef {
@@ -57,11 +69,11 @@ export interface RecipeDef {
   out: Record<string, number>;
 }
 
-export interface BountyTemplate {
-  title: string;
-  wants: Record<string, number>;
-  reward: Record<string, number>;
+export interface BountyTier {
+  zone: number;
+  count: number;
   minutes: number;
+  reward: Record<string, number>;
 }
 
 export interface Content {
@@ -70,7 +82,8 @@ export interface Content {
   weapons: WeaponDef[];
   recipes: RecipeDef[];
   mobs: MobDef[];
-  bounties: { slots: number; templates: BountyTemplate[] };
+  progression: Progression;
+  bounties: { slots: number; fallbackZones: number[]; tiers: BountyTier[] };
   $simplifications?: string[];
 }
 
@@ -99,6 +112,7 @@ export interface WorldView {
   inventory: Record<string, number>;
   kills: Record<string, number>;
   hp: number;
+  cleared: boolean;
   weaponTier: number;
   weaponName: string;
   bounties: Bounty[];
@@ -121,6 +135,7 @@ export interface Mutation {
   weaponTier: number;
   weaponName: string;
   message: string;
+  cleared: boolean;
   bounties: Bounty[] | null;
 }
 

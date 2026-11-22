@@ -1,0 +1,128 @@
+/* 覆盖在游戏画面上的东西：区域进度、Boss 血条、通关界面、锻造/悬赏面板与提示条。
+   基础布局、顶栏、物品栏、触屏按钮在 style.css 里，这个文件在 main.ts 里后引入，同名选择器以这里为准。 */
+
+.stage-zone { color: var(--gold); }
+
+/* Boss 血条：只在玩家站进巢穴、Boss 活着时出现 */
+.boss-bar {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: rgba(12, 15, 22, 0.82);
+  border: 2px solid #6a2a3a;
+  pointer-events: none;
+}
+.boss-bar b { font-size: 13px; color: #ffb0a0; letter-spacing: 1px; white-space: nowrap; }
+.boss-bar em { font-size: 11px; font-style: normal; color: var(--muted); white-space: nowrap; }
+.boss-gauge { position: relative; width: min(46vw, 300px); height: 10px; background: #22141a; overflow: hidden; }
+.boss-gauge i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(#f0705a, #a02a2a);
+  transition: width 0.18s;
+}
+
+/* 通关界面 */
+.victory {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-content: center;
+  padding: 18px;
+  background: rgba(8, 10, 16, 0.86);
+  overflow-y: auto;
+}
+.victory-card {
+  width: min(520px, 100%);
+  padding: 22px;
+  text-align: center;
+  background: var(--panel);
+  border: 2px solid var(--gold);
+}
+.victory-kicker { margin: 0; font-size: 12px; letter-spacing: 3px; color: var(--muted); }
+.victory-title { margin: 6px 0 10px; font-size: 30px; letter-spacing: 4px; color: var(--gold); }
+.victory-note { margin: 0 0 16px; font-size: 13px; line-height: 1.8; color: var(--muted); }
+.victory-stats {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+.victory-stats li {
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+  background: var(--panel-2);
+  border: 2px solid var(--line);
+}
+.victory-stats span { font-size: 11px; color: var(--muted); }
+.victory-stats b { font-size: 14px; }
+.victory-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+/* 锻造面板与悬赏板共用一套骨架 */
+.craft {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(430px, 100%);
+  z-index: 6;
+  overflow-y: auto;
+  background: var(--panel-2);
+  border-left: 2px solid var(--line);
+  padding: 12px;
+}
+.craft-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.craft-head h2 { margin: 0; font-size: 16px; color: var(--accent); }
+.craft-bench { flex: 1; font-size: 11px; color: var(--warn); }
+.craft-bench.on { color: var(--accent); }
+.craft-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.craft-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px;
+  background: var(--panel);
+  border: 2px solid var(--line);
+}
+.craft-icon { width: 40px; height: 40px; image-rendering: pixelated; flex: 0 0 auto; }
+.craft-body { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.craft-name { font-size: 14px; font-weight: 700; }
+.craft-name em { margin-left: 6px; font-size: 11px; font-style: normal; color: var(--gold); }
+.craft-cost, .craft-out { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; color: var(--muted); }
+.craft-cost .short { color: var(--warn); }
+.craft-note { margin: 12px 0 0; font-size: 12px; color: var(--muted); line-height: 1.8; }
+.post-timer { margin-left: 6px; font-size: 11px; font-style: normal; color: var(--muted); }
+.post-timer.urgent { color: var(--warn); font-weight: 700; }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 100px;
+  transform: translateX(-50%);
+  z-index: 30;
+  max-width: min(92vw, 520px);
+  padding: 10px 14px;
+  font-size: 13px;
+  background: rgba(20, 24, 33, 0.95);
+  border: 2px solid var(--accent);
+  color: var(--ink);
+  text-align: center;
+}
+.toast.warn { border-color: var(--warn); color: #ffd9c9; }
+.fade-enter-active, .fade-leave-active { transition: opacity 0.18s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+@media (max-width: 640px) {
+  .craft { width: 100%; border-left: none; }
+  .victory-title { font-size: 24px; }
+  .boss-gauge { width: 42vw; }
+}

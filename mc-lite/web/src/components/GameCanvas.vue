@@ -4,12 +4,13 @@ import { useGame } from '../stores/game';
 import { controls, releaseAll } from '../game/controls';
 import { buildTextures, type Textures } from '../game/textures';
 import { createPlayer, knockback, step, type Player } from '../game/physics';
-import { MAX_MOBS, prune, spawnOne, stepMobs, swing, type Mob, type MobEvents } from '../game/mobs';
+import { bossOf, clearBoss, lairStart, MAX_MOBS, prune, spawnBoss, spawnOne, stepMobs, swing, zoneOf,
+         type Mob, type MobEvents } from '../game/mobs';
 import { drawScene, type Camera, type Swing } from '../game/render';
 
 const game = useGame();
 const canvasEl = ref<HTMLCanvasElement | null>(null);
-const hud = ref({ x: 0, y: 0, hp: 100, mobs: 0 });
+const hud = ref({ x: 0, y: 0, hp: 100, mobs: 0, zone: 1, boss: null as { name: string; hp: number; max: number } | null });
 
 let player: Player = createPlayer(240, 30);
 let mobs: Mob[] = [];
@@ -76,8 +77,22 @@ function trySwing(dt: number) {
 function updateSpawns(now: number) {
   if (now - spawnAt < 900 || mobs.length >= MAX_MOBS) return;
   spawnAt = now;
-  const born = spawnOne(game.mobDefs, game.world!, player);
+  const born = spawnOne(game.mobDefs, game.world!, player, game.progression, game.spawnColumn);
   if (born) mobs.push(born);
+}
+
+// Boss 巢穴：走进最东端那几十列才生成，一次一只；走出来就收回（不算击杀），通关之后巢穴是空的。
+function updateBoss() {
+  const view = game.world!;
+  if (player.x < lairStart(view, game.progression)) {
+    clearBoss(mobs);
+    return;
+  }
+  if (game.cleared || mobs.some((m) => m.def.boss)) return;
+  const boss = spawnBoss(game.mobDefs, view, game.progression);
+  if (!boss) return;
+  mobs.push(boss);
+  game.toast(`${boss.def.name} 从巢穴深处站起来了`, 'warn');
 }
 
 function updateCamera() {
@@ -107,6 +122,7 @@ function loop(now: number) {
     trySwing(dt);
     stepMobs(mobs, view, player, dt, events);
     prune(mobs, player);
+    updateBoss();
     updateSpawns(now);
   }
   updateCamera();
@@ -115,7 +131,15 @@ function loop(now: number) {
   if (now - hudAt > 150) {
     hudAt = now;
     const gx = Math.max(0, Math.min(view.width - 1, Math.floor(player.x)));
-    hud.value = { x: gx, y: Math.floor(player.y), hp, mobs: mobs.filter((m) => m.dying === 0).length };
+    const boss = bossOf(mobs);
+    hud.value = {
+      x: gx,
+      y: Math.floor(player.y),
+      hp,
+      mobs: mobs.filter((m) => m.dying === 0).length,
+      zone: zoneOf(player.x, game.spawnColumn, game.progression) + 1,
+      boss: boss ? { name: boss.def.name, hp: Math.max(0, boss.hp), max: boss.def.hp } : null,
+    };
   }
   if (now - syncAt > 700) {
     syncAt = now;
@@ -227,9 +251,15 @@ onBeforeUnmount(() => {
         <b>{{ Math.round(hud.hp) }} / 100</b>
       </span>
       <span>x{{ hud.x }} · y{{ hud.y }}</span>
+      <span class="stage-zone">区域 {{ hud.zone }} / {{ game.progression.zoneCount }}</span>
       <span>附近怪物 {{ hud.mobs }}</span>
     </div>
-    <div class="stage-tip">点画面或按 J 挥砍 · A/D 移动 · W 跳 · E 锻造 · F 悬赏板</div>
+    <div v-if="hud.boss" class="boss-bar">
+      <b>{{ hud.boss.name }}</b>
+      <span class="boss-gauge"><i :style="{ width: `${(hud.boss.hp / hud.boss.max) * 100}%` }" /></span>
+      <em>{{ Math.ceil(hud.boss.hp) }} / {{ hud.boss.max }}</em>
+    </div>
+    <div class="stage-tip">点画面或按 J 挥砍 · A/D 移动 · W 跳 · E 锻造 · F 悬赏板 · 地图最东端是 Boss 巢穴</div>
     <div v-if="game.dead" class="dead">
       <p class="dead-title">你被怪物打倒了</p>
       <p class="dead-note">材料和悬赏进度都还在存档里，只丢这一条命。</p>

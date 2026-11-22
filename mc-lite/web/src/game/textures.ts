@@ -1,28 +1,9 @@
-import type { BlockDef, Content, MobDef } from '../types';
+import type { BlockDef, Content } from '../types';
+import { canvas, PX, rng, shade } from './art';
+import { paintMob } from './mobArt';
 
 // 全部贴图都是代码画出来的 16×16 像素图，不依赖任何外部美术资源。
-const PX = 16;
-
-function rng(seed: number) {
-  let s = seed >>> 0;
-  return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
-}
-
-function shade(hex: string, amount: number) {
-  const n = parseInt(hex.slice(1), 16);
-  const clamp = (v: number) => Math.max(0, Math.min(255, v));
-  const r = clamp(((n >> 16) & 255) + amount);
-  const g = clamp(((n >> 8) & 255) + amount);
-  const b = clamp((n & 255) + amount);
-  return `rgb(${r},${g},${b})`;
-}
-
-function canvas() {
-  const c = document.createElement('canvas');
-  c.width = PX;
-  c.height = PX;
-  return c;
-}
+// 方块与物品在这里画，怪物造型分到了 mobArt.ts（7 种形状复用给 15 只怪）。
 
 function frame(c: HTMLCanvasElement, g: CanvasRenderingContext2D) {
   g.fillStyle = 'rgba(255,255,255,0.10)';
@@ -196,68 +177,6 @@ function paintItem(key: string, color: string, accent: string, weapon?: number) 
   const g = c.getContext('2d')!;
   if (weapon !== undefined) paintSword(g, color, accent);
   else paintMaterial(g, key, color, accent);
-  return c;
-}
-
-function paintMob(def: MobDef) {
-  const c = canvas();
-  const g = c.getContext('2d')!;
-  const rnd = rng(def.key.length * 31337 + def.hp);
-  const body = def.color;
-  const light = def.accent;
-  if (def.key === 'slime') {
-    g.fillStyle = body;
-    g.fillRect(2, 6, 12, 8);
-    g.fillRect(3, 4, 10, 10);
-    g.fillStyle = light;
-    g.fillRect(4, 5, 4, 2);
-    g.fillStyle = '#20242e';
-    g.fillRect(5, 9, 2, 2);
-    g.fillRect(9, 9, 2, 2);
-    return c;
-  }
-  if (def.key === 'bat') {
-    g.fillStyle = body;
-    g.fillRect(6, 6, 4, 5);
-    g.fillRect(1, 4, 5, 4);
-    g.fillRect(10, 4, 5, 4);
-    g.fillStyle = light;
-    g.fillRect(2, 5, 3, 1);
-    g.fillRect(11, 5, 3, 1);
-    g.fillStyle = '#f0d060';
-    g.fillRect(7, 7, 1, 1);
-    g.fillRect(9, 7, 1, 1);
-    return c;
-  }
-  if (def.key === 'golem') {
-    g.fillStyle = body;
-    g.fillRect(2, 4, 12, 10);
-    g.fillRect(4, 2, 8, 12);
-    for (let i = 0; i < 18; i++) {
-      g.fillStyle = rnd() < 0.5 ? shade(body, -26) : shade(body, 20);
-      g.fillRect(3 + Math.floor(rnd() * 10), 3 + Math.floor(rnd() * 10), 2, 2);
-    }
-    g.fillStyle = light;
-    g.fillRect(5, 6, 2, 2);
-    g.fillRect(9, 6, 2, 2);
-    g.fillRect(6, 10, 4, 1);
-    return c;
-  }
-  // 僵尸与骷髅共用直立人形，靠配色和细节区分。
-  const skeleton = def.key === 'skeleton';
-  g.fillStyle = body;
-  g.fillRect(5, 1, 6, 5);
-  g.fillRect(4, 6, 8, 6);
-  g.fillRect(5, 12, 2, 3);
-  g.fillRect(9, 12, 2, 3);
-  g.fillRect(2, 7, 2, 5);
-  g.fillRect(12, 7, 2, 5);
-  g.fillStyle = skeleton ? shade(body, -40) : light;
-  g.fillRect(skeleton ? 6 : 5, 7, skeleton ? 4 : 6, 1);
-  g.fillRect(7, 9, 2, 2);
-  g.fillStyle = skeleton ? '#2a2a30' : '#1c2a1c';
-  g.fillRect(6, 3, 1, 2);
-  g.fillRect(9, 3, 1, 2);
   return c;
 }
 
