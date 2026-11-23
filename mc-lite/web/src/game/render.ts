@@ -1,6 +1,7 @@
 import type { WorldView } from '../types';
 import type { Mob } from './mobs';
-import { PLAYER_H, PLAYER_W, type Player } from './physics';
+import type { Player } from './physics';
+import { canvasOps, paintPlayer, PLAYER_GRID_H, PLAYER_GRID_W, PLAYER_TILE_H, PLAYER_TILE_W } from './playerArt';
 import type { Textures } from './textures';
 
 export interface Camera {
@@ -44,7 +45,7 @@ export function drawScene(
   }
 
   for (const mob of mobs) drawMob(ctx, mob, cam, tex);
-  drawPlayer(ctx, player, cam);
+  drawPlayer(ctx, player, cam, swing !== null);
   if (swing) drawSwing(ctx, player, cam, swing);
 }
 
@@ -181,35 +182,22 @@ function drawMobBar(ctx: CanvasRenderingContext2D, mob: Mob, left: number, top: 
   ctx.fillRect(x + 1, y + 1, (barW - 2) * Math.max(0, mob.hp / mob.def.hp), barH - 2);
 }
 
-function drawPlayer(ctx: CanvasRenderingContext2D, p: Player, cam: Camera) {
-  const w = PLAYER_W * cam.tile;
-  const h = PLAYER_H * cam.tile;
+function drawPlayer(ctx: CanvasRenderingContext2D, p: Player, cam: Camera, swinging: boolean) {
+  const w = PLAYER_TILE_W * cam.tile;
+  const h = PLAYER_TILE_H * cam.tile;
   const left = Math.round((p.x - cam.x) * cam.tile - w / 2);
   const top = Math.round((p.y - cam.y) * cam.tile - h / 2);
-  const swing = p.onGround ? Math.sin(p.walk * 3.4) * 0.16 : 0.14;
-  const px = (v: number) => Math.round(v);
 
   ctx.save();
   if (p.hurt > 0) ctx.globalAlpha = 0.55 + Math.sin(p.hurt * 40) * 0.35;
   if (p.onGround) {
     ctx.fillStyle = 'rgba(0,0,0,0.22)';
-    ctx.fillRect(left - px(w * 0.1), top + h - 2, px(w * 1.2), 3);
+    ctx.beginPath();
+    ctx.ellipse(left + w / 2, top + h - 1, w * 0.52, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
   }
-  ctx.fillStyle = '#2f3548';
-  ctx.fillRect(left + px(w * 0.16), top + px(h * 0.66), px(w * 0.26), px(h * 0.34 + swing * h * 0.1));
-  ctx.fillRect(left + px(w * 0.58), top + px(h * 0.66), px(w * 0.26), px(h * 0.34 - swing * h * 0.1));
-  ctx.fillStyle = '#3f6fb5';
-  ctx.fillRect(left + px(w * 0.14), top + px(h * 0.3), px(w * 0.72), px(h * 0.38));
-  ctx.fillStyle = '#e8b98d';
-  const armX = p.facing === 1 ? left + px(w * 0.68) : left + px(w * 0.14);
-  ctx.fillRect(armX, top + px(h * (0.34 + swing * 0.12)), px(w * 0.2), px(h * 0.3));
-  ctx.fillRect(left + px(w * 0.16), top, px(w * 0.68), px(h * 0.3));
-  ctx.fillStyle = '#3a2a1c';
-  ctx.fillRect(left + px(w * 0.14), top, px(w * 0.72), px(h * 0.09));
-  ctx.fillRect(p.facing === 1 ? left + px(w * 0.14) : left + px(w * 0.72), top, px(w * 0.14), px(h * 0.2));
-  ctx.fillStyle = '#20242e';
-  const eyeX = p.facing === 1 ? left + px(w * 0.6) : left + px(w * 0.28);
-  ctx.fillRect(eyeX, top + px(h * 0.15), Math.max(2, px(w * 0.12)), Math.max(2, px(h * 0.05)));
+  const ops = canvasOps(ctx, left, top, w / PLAYER_GRID_W, h / PLAYER_GRID_H);
+  paintPlayer(ops, { walk: p.walk, onGround: p.onGround, moving: Math.abs(p.vx) > 0.2, swinging, facing: p.facing });
   ctx.restore();
 }
 
